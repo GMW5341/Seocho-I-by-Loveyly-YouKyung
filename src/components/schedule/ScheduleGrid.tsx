@@ -1,16 +1,27 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
 import { useAppStore } from '../../store/StoreContext';
 import type { DayOfWeek, ScheduleSlot } from '../../types';
-import { DAYS_OF_WEEK, generateTimeSlots, getOperatingHours, getEndTime, isTimeOverlapping, getDurationColor } from '../../utils/helpers';
+import {
+  DAYS_OF_WEEK,
+  getOperatingHours,
+  getEndTime,
+  isTimeOverlapping,
+  getDurationColor,
+  timeToMinutes,
+  minutesToTime,
+  layoutSlotsForDay,
+} from '../../utils/helpers';
 import Modal from '../common/Modal';
 import MakeupForm from './MakeupForm';
+
+const PX_PER_MINUTE = 2.5;
 
 export default function ScheduleGrid() {
   const { students, schedules, settings, moveSchedule, removeSchedule, addSchedule } = useAppStore();
   const [showMakeupForm, setShowMakeupForm] = useState(false);
   const [draggedSlot, setDraggedSlot] = useState<ScheduleSlot | null>(null);
   const [hoveredCell, setHoveredCell] = useState<{ day: DayOfWeek; time: string } | null>(null);
-  const gridRef = useRef<HTMLDivElement>(null);
+  const dayColumnRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const activeStudents = useMemo(() => students.filter(s => s.active), [students]);
 
@@ -18,35 +29,59 @@ export default function ScheduleGrid() {
     return activeStudents.find(s => s.id === id);
   }, [activeStudents]);
 
-  // Get all time slots for the current season
-  const allTimeSlots = useMemo(() => {
-    const allTimes = new Set<string>();
+  // Compute unified time range across all days
+  const timeRange = useMemo(() => {
+    let earliest = 24 * 60;
+    let latest = 0;
     DAYS_OF_WEEK.forEach(day => {
       const hours = getOperatingHours(settings, day);
       if (hours) {
-        generateTimeSlots(hours.start, hours.end, 30).forEach(t => allTimes.add(t));
+        earliest = Math.min(earliest, timeToMinutes(hours.start));
+        latest = Math.max(latest, timeToMinutes(hours.end));
       }
     });
-    return Array.from(allTimes).sort();
+    if (earliest >= latest) {
+      earliest = 10 * 60;
+      latest = 19 * 60;
+    }
+    return { earliest, latest, totalMinutes: latest - earliest };
   }, [settings]);
 
-  // Get slots for a specific day and time
-  const getSlotsAt = useCallback((day: DayOfWeek, time: string): ScheduleSlot[] => {
-    return schedules.filter(s => {
-      if (s.dayOfWeek !== day) return false;
-      return isTimeOverlapping(s.startTime, s.duration, time, 30);
+  const totalHeight = timeRange.totalMinutes * PX_PER_MINUTE;
+
+  // Time markers at 30-minute intervals
+  const timeMarkers = useMemo(() => {
+    const markers: string[] = [];
+    const startMin = Math.ceil(timeRange.earliest / 30) * 30;
+    for (let m = startMin; m <= timeRange.latest; m += 30) {
+      markers.push(minutesToTime(m));
+    }
+    return markers;
+  }, [timeRange]);
+
+  // Schedules grouped by day with layout info
+  const daySchedules = useMemo(() => {
+    const result: Record<string, Array<ScheduleSlot & { column: number; numColumns: number }>> = {};
+    DAYS_OF_WEEK.forEach(day => {
+      const daySlots = schedules.filter(s => s.dayOfWeek === day);
+      const layout = layoutSlotsForDay(daySlots);
+      result[day] = daySlots.map(slot => {
+        const pos = layout.get(slot.id) || { column: 0, numColumns: 1 };
+        return { ...slot, column: pos.column, numColumns: pos.numColumns };
+      });
     });
+    return result;
   }, [schedules]);
 
-  // Check if drop is valid
+  // Drop validation
   const isDropValid = useCallback((day: DayOfWeek, time: string, slot: ScheduleSlot): boolean => {
     const hours = getOperatingHours(settings, day);
     if (!hours) return false;
 
-    // Check operating hours
-    if (time < hours.start || getEndTime(time, slot.duration) > hours.end) return false;
+    const startMin = timeToMinutes(time);
+    const endMin = startMin + slot.duration;
+    if (startMin < timeToMinutes(hours.start) || endMin > timeToMinutes(hours.end)) return false;
 
-    // Check capacity (exclude the dragged slot itself)
     const existingSlots = schedules.filter(s => {
       if (s.id === slot.id) return false;
       if (s.dayOfWeek !== day) return false;
@@ -56,18 +91,37 @@ export default function ScheduleGrid() {
     return existingSlots.length < settings.maxStudentsPerSlot;
   }, [settings, schedules]);
 
+  // Drag handlers
   const handleDragStart = (slot: ScheduleSlot) => {
     setDraggedSlot(slot);
   };
 
-  const handleDragOver = (e: React.DragEvent, day: DayOfWeek, time: string) => {
-    e.preventDefault();
-    setHoveredCell({ day, time });
+  const computeTimeFromY = (e: React.DragEvent, day: DayOfWeek): string | null => {
+    const col = dayColumnRefs.current[day];
+    if (!col) return null;
+    const rect = col.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const rawMinutes = Math.floor(y / PX_PER_MINUTE) + timeRange.earliest;
+    // Snap to 10-minute intervals
+    const snapped = Math.round(rawMinutes / 10) * 10;
+    const clamped = Math.max(timeRange.earliest, Math.min(snapped, timeRange.latest));
+    return minutesToTime(clamped);
   };
 
-  const handleDrop = (e: React.DragEvent, day: DayOfWeek, time: string) => {
+  const handleDayDragOver = (e: React.DragEvent, day: DayOfWeek) => {
     e.preventDefault();
-    if (draggedSlot && isDropValid(day, time, draggedSlot)) {
+    const hours = getOperatingHours(settings, day);
+    if (!hours) return;
+    const time = computeTimeFromY(e, day);
+    if (time) {
+      setHoveredCell({ day, time });
+    }
+  };
+
+  const handleDayDrop = (e: React.DragEvent, day: DayOfWeek) => {
+    e.preventDefault();
+    const time = computeTimeFromY(e, day);
+    if (time && draggedSlot && isDropValid(day, time, draggedSlot)) {
       moveSchedule(draggedSlot.id, day, time);
     }
     setDraggedSlot(null);
@@ -124,105 +178,167 @@ export default function ScheduleGrid() {
       </div>
 
       {/* Schedule Grid */}
-      <div ref={gridRef} className="bg-white rounded-xl border border-gray-200 overflow-auto">
-        <table className="w-full border-collapse min-w-[800px]">
-          <thead>
-            <tr className="bg-gray-50">
-              <th className="border-b border-r border-gray-200 px-3 py-2 text-xs font-medium text-gray-500 w-20 sticky left-0 bg-gray-50 z-10">시간</th>
-              {DAYS_OF_WEEK.map(day => {
-                const hours = getOperatingHours(settings, day);
+      <div className="bg-white rounded-xl border border-gray-200 overflow-auto">
+        <div className="min-w-[800px]">
+          {/* Header */}
+          <div className="flex bg-gray-50 border-b border-gray-200">
+            <div className="w-16 shrink-0 px-2 py-2 text-xs font-medium text-gray-500 text-center border-r border-gray-200">
+              시간
+            </div>
+            {DAYS_OF_WEEK.map(day => {
+              const hours = getOperatingHours(settings, day);
+              return (
+                <div key={day} className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 text-center border-r border-gray-200 last:border-r-0">
+                  {day}요일
+                  {hours && <span className="block text-xs font-normal text-gray-400">{hours.start}-{hours.end}</span>}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Body: Time labels + Day columns */}
+          <div className="flex">
+            {/* Time labels */}
+            <div className="w-16 shrink-0 relative border-r border-gray-200" style={{ height: totalHeight }}>
+              {timeMarkers.map(time => {
+                const top = (timeToMinutes(time) - timeRange.earliest) * PX_PER_MINUTE;
                 return (
-                  <th key={day} className="border-b border-r border-gray-200 px-3 py-2 text-sm font-medium text-gray-700">
-                    {day}요일
-                    {hours && <span className="block text-xs font-normal text-gray-400">{hours.start}-{hours.end}</span>}
-                  </th>
+                  <div
+                    key={time}
+                    className="absolute left-0 right-0 text-[11px] text-gray-500 font-mono px-1 -translate-y-1/2"
+                    style={{ top }}
+                  >
+                    {time}
+                  </div>
                 );
               })}
-            </tr>
-          </thead>
-          <tbody>
-            {allTimeSlots.map(time => (
-              <tr key={time} className="group">
-                <td className="border-b border-r border-gray-100 px-3 py-1 text-xs text-gray-500 font-mono sticky left-0 bg-white z-10">
-                  {time}
-                </td>
-                {DAYS_OF_WEEK.map(day => {
-                  const hours = getOperatingHours(settings, day);
-                  const isOperating = hours && time >= hours.start && time < hours.end;
-                  const slots = getSlotsAt(day, time);
-                  const count = slots.length;
-                  const isFull = count >= settings.maxStudentsPerSlot;
-                  const isHovered = hoveredCell?.day === day && hoveredCell?.time === time;
-                  const isValidDrop = draggedSlot ? isDropValid(day, time, draggedSlot) : false;
+            </div>
 
-                  // Only show the slot card at its start time
-                  const startingSlots = schedules.filter(s => s.dayOfWeek === day && s.startTime === time);
+            {/* Day columns */}
+            {DAYS_OF_WEEK.map(day => {
+              const hours = getOperatingHours(settings, day);
+              const isOperating = !!hours;
+              const daySlots = daySchedules[day] || [];
 
-                  return (
-                    <td
-                      key={day}
-                      className={`border-b border-r border-gray-100 px-1 py-1 align-top transition-colors relative ${
-                        !isOperating ? 'bg-gray-100' :
-                        isHovered && isValidDrop ? 'bg-green-50' :
-                        isHovered && !isValidDrop ? 'bg-red-50' :
-                        isFull ? 'bg-red-50/30' : ''
+              // Operating range for this day
+              const opStart = hours ? timeToMinutes(hours.start) : timeRange.earliest;
+              const opEnd = hours ? timeToMinutes(hours.end) : timeRange.latest;
+
+              return (
+                <div
+                  key={day}
+                  ref={el => { dayColumnRefs.current[day] = el; }}
+                  className={`flex-1 relative border-r border-gray-200 last:border-r-0 ${!isOperating ? 'bg-gray-100' : ''}`}
+                  style={{ height: totalHeight }}
+                  onDragOver={e => isOperating ? handleDayDragOver(e, day) : undefined}
+                  onDrop={e => isOperating ? handleDayDrop(e, day) : undefined}
+                >
+                  {/* Non-operating overlay (before hours) */}
+                  {hours && timeToMinutes(hours.start) > timeRange.earliest && (
+                    <div
+                      className="absolute left-0 right-0 bg-gray-100/70"
+                      style={{
+                        top: 0,
+                        height: (timeToMinutes(hours.start) - timeRange.earliest) * PX_PER_MINUTE,
+                      }}
+                    />
+                  )}
+                  {/* Non-operating overlay (after hours) */}
+                  {hours && timeToMinutes(hours.end) < timeRange.latest && (
+                    <div
+                      className="absolute left-0 right-0 bg-gray-100/70"
+                      style={{
+                        top: (timeToMinutes(hours.end) - timeRange.earliest) * PX_PER_MINUTE,
+                        height: (timeRange.latest - timeToMinutes(hours.end)) * PX_PER_MINUTE,
+                      }}
+                    />
+                  )}
+
+                  {/* 30-minute grid lines */}
+                  {timeMarkers.map(time => {
+                    const top = (timeToMinutes(time) - timeRange.earliest) * PX_PER_MINUTE;
+                    const min = timeToMinutes(time);
+                    if (min < opStart || min >= opEnd) return null;
+                    return (
+                      <div
+                        key={time}
+                        className="absolute left-0 right-0 border-t border-gray-100"
+                        style={{ top }}
+                      />
+                    );
+                  })}
+
+                  {/* Drop hover indicator */}
+                  {hoveredCell?.day === day && draggedSlot && (
+                    <div
+                      className={`absolute left-1 right-1 rounded border-2 z-20 pointer-events-none ${
+                        isDropValid(day, hoveredCell.time, draggedSlot)
+                          ? 'border-green-400 bg-green-50/60'
+                          : 'border-red-400 bg-red-50/60'
                       }`}
-                      onDragOver={e => isOperating ? handleDragOver(e, day, time) : undefined}
-                      onDrop={e => isOperating ? handleDrop(e, day, time) : undefined}
-                      style={{ minHeight: '40px', height: '40px' }}
-                    >
-                      {isOperating && (
-                        <div className="flex flex-wrap gap-1">
-                          {startingSlots.map(slot => {
-                            const student = getStudentById(slot.studentId);
-                            if (!student) return null;
-                            return (
-                              <div
-                                key={slot.id}
-                                draggable
-                                onDragStart={() => handleDragStart(slot)}
-                                onDragEnd={handleDragEnd}
-                                className={`
-                                  text-xs px-1.5 py-0.5 rounded cursor-grab active:cursor-grabbing
-                                  border select-none relative group/card
-                                  ${getDurationColor(slot.duration)}
-                                  ${!slot.isRegular ? 'border-dashed border-orange-400' : ''}
-                                  ${draggedSlot?.id === slot.id ? 'opacity-40' : ''}
-                                `}
-                                title={`${student.name} (${student.level}) - ${slot.duration}분 [${slot.startTime}~${getEndTime(slot.startTime, slot.duration)}]`}
-                              >
-                                <div className="font-medium truncate max-w-[80px]">{student.name}</div>
-                                <div className="text-[10px] text-gray-500">{slot.duration}분</div>
-                                {!slot.isRegular && <div className="text-[10px] text-orange-600">보강</div>}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (confirm(`${student.name} 스케줄을 삭제하시겠습니까?`)) removeSchedule(slot.id);
-                                  }}
-                                  className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[10px] leading-none items-center justify-center hidden group-hover/card:flex"
-                                >
-                                  &times;
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                      {/* Capacity indicator */}
-                      {isOperating && count > 0 && time === allTimeSlots.find(t => getSlotsAt(day, t).length > 0 && schedules.some(s => s.dayOfWeek === day && s.startTime === t)) && (
-                        <div className={`absolute top-0 right-0 text-[9px] px-1 rounded-bl ${
-                          isFull ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-600'
-                        }`}>
-                          {count}/{settings.maxStudentsPerSlot}
-                        </div>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                      style={{
+                        top: (timeToMinutes(hoveredCell.time) - timeRange.earliest) * PX_PER_MINUTE,
+                        height: draggedSlot.duration * PX_PER_MINUTE,
+                      }}
+                    />
+                  )}
+
+                  {/* Schedule blocks */}
+                  {daySlots.map(slot => {
+                    const student = getStudentById(slot.studentId);
+                    if (!student) return null;
+
+                    const top = (timeToMinutes(slot.startTime) - timeRange.earliest) * PX_PER_MINUTE;
+                    const height = slot.duration * PX_PER_MINUTE;
+                    const widthPercent = 100 / slot.numColumns;
+                    const leftPercent = slot.column * widthPercent;
+                    const endTime = getEndTime(slot.startTime, slot.duration);
+
+                    return (
+                      <div
+                        key={slot.id}
+                        draggable
+                        onDragStart={() => handleDragStart(slot)}
+                        onDragEnd={handleDragEnd}
+                        className={`
+                          absolute z-10 px-1.5 py-1 rounded cursor-grab active:cursor-grabbing
+                          border select-none group/card overflow-hidden
+                          transition-opacity
+                          ${getDurationColor(slot.duration)}
+                          ${!slot.isRegular ? 'border-dashed border-orange-400 border-2' : ''}
+                          ${draggedSlot?.id === slot.id ? 'opacity-40' : 'opacity-95 hover:opacity-100'}
+                        `}
+                        style={{
+                          top: top + 1,
+                          height: height - 2,
+                          left: `calc(${leftPercent}% + 2px)`,
+                          width: `calc(${widthPercent}% - 4px)`,
+                        }}
+                        title={`${student.name} (${student.level}) - ${slot.duration}분 [${slot.startTime}~${endTime}]`}
+                      >
+                        <div className="font-semibold text-xs truncate text-gray-800">{student.name}</div>
+                        <div className="text-[10px] text-gray-500">{slot.startTime}-{endTime}</div>
+                        <div className="text-[10px] text-gray-500">{slot.duration}분</div>
+                        {!slot.isRegular && <div className="text-[10px] text-orange-600 font-medium">보강</div>}
+
+                        {/* Delete button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`${student.name} 스케줄을 삭제하시겠습니까?`)) removeSchedule(slot.id);
+                          }}
+                          className="absolute top-0 right-0 w-4 h-4 bg-red-500 text-white rounded-full text-[10px] leading-none items-center justify-center hidden group-hover/card:flex"
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       <Modal isOpen={showMakeupForm} onClose={() => setShowMakeupForm(false)} title="보강 수업 추가">

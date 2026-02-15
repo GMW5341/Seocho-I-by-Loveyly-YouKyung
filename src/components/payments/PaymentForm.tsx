@@ -17,7 +17,10 @@ export default function PaymentForm({ students, settings, payment, onSubmit, onC
   const [studentId, setStudentId] = useState(payment?.studentId || '');
   const [totalSessions, setTotalSessions] = useState(payment?.totalSessions || 4);
   const [classDuration, setClassDuration] = useState<ClassDuration>(payment?.classDuration || 60);
+  const [originalAmount, setOriginalAmount] = useState(payment?.originalAmount || payment?.amount || 0);
+  const [discountRate, setDiscountRate] = useState(payment?.discountRate || 0);
   const [amount, setAmount] = useState(payment?.amount || 0);
+  const [manualAmount, setManualAmount] = useState(false);
   const [method, setMethod] = useState<PaymentMethod>(payment?.method || '카드');
   const [paidAt, setPaidAt] = useState(payment?.paidAt || format(new Date(), 'yyyy-MM-dd'));
   const [startDate, setStartDate] = useState(payment?.startDate || format(new Date(), 'yyyy-MM-dd'));
@@ -25,13 +28,22 @@ export default function PaymentForm({ students, settings, payment, onSubmit, onC
 
   const selectedStudent = students.find(s => s.id === studentId);
 
-  // Auto-calculate price based on sessions and duration
+  // Auto-calculate original price based on sessions and duration
   useEffect(() => {
-    if (!payment) {
+    if (!payment && !manualAmount) {
       const basePrice = settings.pricing[classDuration];
-      setAmount(getPricePerSession(basePrice, totalSessions));
+      const calculated = getPricePerSession(basePrice, totalSessions);
+      setOriginalAmount(calculated);
     }
-  }, [totalSessions, classDuration, settings.pricing, payment]);
+  }, [totalSessions, classDuration, settings.pricing, payment, manualAmount]);
+
+  // Apply discount to calculate final amount
+  useEffect(() => {
+    if (!manualAmount) {
+      const discounted = Math.round(originalAmount * (1 - discountRate / 100));
+      setAmount(discounted);
+    }
+  }, [originalAmount, discountRate, manualAmount]);
 
   // Auto-set duration from student selection
   useEffect(() => {
@@ -47,6 +59,8 @@ export default function PaymentForm({ students, settings, payment, onSubmit, onC
       studentId,
       totalSessions,
       amount,
+      originalAmount,
+      discountRate,
       method,
       classDuration,
       paidAt,
@@ -113,22 +127,109 @@ export default function PaymentForm({ students, settings, payment, onSubmit, onC
         </div>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">결제 금액</label>
-        <div className="relative">
-          <input
-            type="number"
-            value={amount}
-            onChange={e => setAmount(Number(e.target.value))}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm pr-12"
-            min={0}
-            step={10000}
-          />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">원</span>
+      {/* Price section */}
+      <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">기본 금액</label>
+          <div className="relative">
+            <input
+              type="number"
+              value={originalAmount}
+              onChange={e => {
+                setManualAmount(true);
+                setOriginalAmount(Number(e.target.value));
+              }}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm pr-12"
+              min={0}
+              step={1}
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">원</span>
+          </div>
+          <p className="text-xs text-gray-400 mt-1">
+            자동계산: {totalSessions}회 x {formatCurrency(settings.pricing[classDuration] / 4)}/회 = {formatCurrency(getPricePerSession(settings.pricing[classDuration], totalSessions))}
+            {manualAmount && (
+              <button
+                type="button"
+                onClick={() => {
+                  setManualAmount(false);
+                  setOriginalAmount(getPricePerSession(settings.pricing[classDuration], totalSessions));
+                }}
+                className="ml-2 text-indigo-600 hover:text-indigo-800 underline"
+              >
+                자동계산으로 복원
+              </button>
+            )}
+          </p>
         </div>
-        <p className="text-xs text-gray-400 mt-1">
-          자동계산: {totalSessions}회 x {formatCurrency(settings.pricing[classDuration] / 4)}/회 = {formatCurrency(getPricePerSession(settings.pricing[classDuration], totalSessions))}
-        </p>
+
+        {/* Discount */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">할인율</label>
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1">
+              <input
+                type="number"
+                value={discountRate}
+                onChange={e => {
+                  const val = Math.max(0, Math.min(100, Number(e.target.value)));
+                  setDiscountRate(val);
+                  setManualAmount(false);
+                }}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm pr-8"
+                min={0}
+                max={100}
+                step={1}
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">%</span>
+            </div>
+            <div className="flex gap-1">
+              {[5, 10, 15, 20].map(rate => (
+                <button
+                  type="button"
+                  key={rate}
+                  onClick={() => {
+                    setDiscountRate(rate);
+                    setManualAmount(false);
+                  }}
+                  className={`px-2 py-1.5 rounded text-xs font-medium border ${
+                    discountRate === rate ? 'bg-orange-50 border-orange-300 text-orange-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {rate}%
+                </button>
+              ))}
+            </div>
+          </div>
+          {discountRate > 0 && (
+            <p className="text-xs text-orange-600 mt-1">
+              할인: -{formatCurrency(Math.round(originalAmount * discountRate / 100))}
+            </p>
+          )}
+        </div>
+
+        {/* Final amount */}
+        <div className="border-t border-gray-200 pt-3">
+          <label className="block text-sm font-bold text-gray-800 mb-1">최종 결제 금액</label>
+          <div className="relative">
+            <input
+              type="number"
+              value={amount}
+              onChange={e => {
+                setManualAmount(true);
+                setAmount(Number(e.target.value));
+              }}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm pr-12 font-bold text-lg"
+              min={0}
+              step={1}
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">원</span>
+          </div>
+          {discountRate > 0 && (
+            <p className="text-xs text-gray-500 mt-1">
+              {formatCurrency(originalAmount)} - {discountRate}% = {formatCurrency(amount)}
+            </p>
+          )}
+        </div>
       </div>
 
       <div>

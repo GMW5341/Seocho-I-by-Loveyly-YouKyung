@@ -94,6 +94,10 @@ export default function Dashboard() {
       const absences = attendance.filter(r => r.studentId === s.id && r.status === '결석').length;
       const makeups = attendance.filter(r => r.studentId === s.id && r.status === '보강').length;
       return absences > makeups;
+    }).map(s => {
+      const absences = attendance.filter(r => r.studentId === s.id && r.status === '결석').length;
+      const makeups = attendance.filter(r => r.studentId === s.id && r.status === '보강').length;
+      return { student: s, pending: absences - makeups };
     });
 
     return {
@@ -103,6 +107,7 @@ export default function Dashboard() {
       unpaidCount: unpaidStudents.length,
       expiringCount: expiringPayments.length,
       makeupNeeded: needsMakeup.length,
+      makeupStudents: needsMakeup,
       todayClassCount: todaySchedule.length,
     };
   }, [activeStudents, payments, attendance, todaySchedule]);
@@ -181,37 +186,74 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* Student Level Distribution */}
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <h4 className="text-sm font-semibold text-gray-700 mb-4">반별 원생 분포</h4>
           {levelDistribution.length > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
+            <ResponsiveContainer width="100%" height={280}>
               <PieChart>
                 <Pie
                   data={levelDistribution}
                   cx="50%"
-                  cy="50%"
+                  cy="45%"
                   innerRadius={50}
                   outerRadius={80}
                   paddingAngle={5}
                   dataKey="value"
-                  label={({ name, value }) => `${name}: ${value}명`}
                 >
                   {levelDistribution.map((_, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip formatter={(value) => `${value}명`} />
+                <Legend
+                  verticalAlign="bottom"
+                  formatter={(value, _entry) => {
+                    const item = levelDistribution.find(d => d.name === value);
+                    return `${value}: ${item?.value || 0}명`;
+                  }}
+                />
               </PieChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-[200px] flex items-center justify-center text-sm text-gray-400">
+            <div className="h-[280px] flex items-center justify-center text-sm text-gray-400">
               데이터가 없습니다
             </div>
           )}
         </div>
 
+        {/* Makeup Needed Students */}
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h4 className="text-sm font-semibold text-gray-700 mb-4">
+            보강 필요 원생
+            {metrics.makeupStudents.length > 0 && (
+              <span className="ml-2 text-xs font-normal text-orange-600">
+                {metrics.makeupStudents.length}명
+              </span>
+            )}
+          </h4>
+          <div className="space-y-2 max-h-[250px] overflow-y-auto">
+            {metrics.makeupStudents.length > 0 ? metrics.makeupStudents
+              .sort((a, b) => b.pending - a.pending)
+              .map(item => (
+              <div key={item.student.id} className="flex items-center justify-between p-2 rounded-lg bg-orange-50">
+                <div>
+                  <div className="text-sm font-medium text-gray-800">{item.student.name}</div>
+                  <div className="text-xs text-gray-500">
+                    {item.student.level} | {item.student.regularDays.join(', ')} {item.student.regularStartTime}
+                  </div>
+                </div>
+                <Badge variant="warning">보강 {item.pending}회</Badge>
+              </div>
+            )) : (
+              <div className="text-sm text-gray-400 text-center py-8">보강이 필요한 원생이 없습니다</div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Today's Schedule */}
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <h4 className="text-sm font-semibold text-gray-700 mb-4">오늘 수업 일정</h4>

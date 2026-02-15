@@ -154,3 +154,53 @@ export function getDurationColor(duration: ClassDuration): string {
     default: return 'bg-gray-50 border-gray-300';
   }
 }
+
+export function timeToMinutes(time: string): number {
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+export function minutesToTime(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+}
+
+export function layoutSlotsForDay(
+  daySlots: { id: string; startTime: string; duration: number }[]
+): Map<string, { column: number; numColumns: number }> {
+  if (daySlots.length === 0) return new Map();
+
+  const sorted = [...daySlots].sort((a, b) => {
+    const diff = timeToMinutes(a.startTime) - timeToMinutes(b.startTime);
+    return diff !== 0 ? diff : b.duration - a.duration;
+  });
+
+  const placed: Array<{
+    id: string;
+    column: number;
+    startMin: number;
+    endMin: number;
+  }> = [];
+
+  for (const slot of sorted) {
+    const startMin = timeToMinutes(slot.startTime);
+    const endMin = startMin + slot.duration;
+    let col = 0;
+    while (placed.some(p => p.column === col && p.endMin > startMin && p.startMin < endMin)) {
+      col++;
+    }
+    placed.push({ id: slot.id, column: col, startMin, endMin });
+  }
+
+  const result = new Map<string, { column: number; numColumns: number }>();
+  for (const p of placed) {
+    const overlapping = placed.filter(other =>
+      other.endMin > p.startMin && other.startMin < p.endMin
+    );
+    const numColumns = Math.max(...overlapping.map(o => o.column + 1));
+    result.set(p.id, { column: p.column, numColumns });
+  }
+
+  return result;
+}

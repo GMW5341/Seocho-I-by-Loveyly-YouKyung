@@ -51,6 +51,8 @@ export interface Payment {
   id: string;
   studentId: string;
   amount: number;
+  originalAmount?: number; // 할인 전 원래 금액
+  discountRate?: number; // 할인율 (%)
   totalSessions: number; // 결제한 총 수업 횟수
   usedSessions: number; // 사용한 수업 횟수
   remainingSessions: number; // 남은 수업 횟수
