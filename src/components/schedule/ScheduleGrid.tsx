@@ -338,10 +338,23 @@ export default function ScheduleGrid() {
           date: newDate,
         });
       } else {
-        // 비정규(보강 등): 기존처럼 직접 이동
-        moveSchedule(draggedSlot.id, day, time);
-        if (draggedSlot.date) {
-          updateSchedule(draggedSlot.id, { date: newDate });
+        // 비정규 슬롯: 원래 정규 위치로 되돌리는 경우인지 확인
+        const matchingHidden = schedules.find(s =>
+          s.isOverrideHidden &&
+          s.studentId === draggedSlot.studentId &&
+          s.dayOfWeek === day &&
+          s.startTime === time
+        );
+        if (matchingHidden) {
+          // 원래 자리로 복원: 숨김 마커 제거 + 임시 슬롯 제거 → 정규 슬롯 자동 복원
+          removeSchedule(matchingHidden.id);
+          removeSchedule(draggedSlot.id);
+        } else {
+          // 일반 이동
+          moveSchedule(draggedSlot.id, day, time);
+          if (draggedSlot.date) {
+            updateSchedule(draggedSlot.id, { date: newDate });
+          }
         }
       }
     }
