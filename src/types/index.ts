@@ -82,6 +82,7 @@ export interface Payment {
 export interface Holiday {
   id: string;
   date: string;
+  endDate?: string; // 기간 설정 시 종료일
   name: string;
 }
 

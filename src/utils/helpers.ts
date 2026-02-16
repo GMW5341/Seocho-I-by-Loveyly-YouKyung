@@ -1,6 +1,6 @@
-import { format, parse, addMinutes, isAfter, isBefore, isSameDay, parseISO } from 'date-fns';
+import { format, parse, addMinutes, isAfter, isBefore, isSameDay, parseISO, eachDayOfInterval } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import type { DayOfWeek, AcademySettings } from '../types';
+import type { DayOfWeek, AcademySettings, Holiday } from '../types';
 
 export const DAY_MAP: Record<DayOfWeek, number> = {
   '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6
@@ -92,6 +92,19 @@ export function isSameDayCheck(date1: string, date2: string): boolean {
 export function getPricePerSession(basePricePer4: number, sessions: number): number {
   const pricePerSession = basePricePer4 / 4;
   return Math.round(pricePerSession * sessions);
+}
+
+export function expandHolidayDates(holidays: Holiday[]): string[] {
+  const dates: Set<string> = new Set();
+  holidays.forEach(h => {
+    if (h.endDate && h.endDate > h.date) {
+      eachDayOfInterval({ start: parseISO(h.date), end: parseISO(h.endDate) })
+        .forEach(d => dates.add(format(d, 'yyyy-MM-dd')));
+    } else {
+      dates.add(h.date);
+    }
+  });
+  return Array.from(dates);
 }
 
 export function calculateNextPaymentDate(

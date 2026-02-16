@@ -7,7 +7,9 @@ import { DAYS_OF_WEEK, formatCurrency } from '../../utils/helpers';
 export default function SettingsPage() {
   const { settings, updateSettings, holidays, addHoliday, removeHoliday, logoDataUrl, setLogoDataUrl } = useAppStore();
   const [newHolidayDate, setNewHolidayDate] = useState('');
+  const [newHolidayEndDate, setNewHolidayEndDate] = useState('');
   const [newHolidayName, setNewHolidayName] = useState('');
+  const [isRangeMode, setIsRangeMode] = useState(false);
 
   const handleSeasonChange = (season: SeasonType) => {
     updateSettings({ currentSeason: season });
@@ -43,8 +45,16 @@ export default function SettingsPage() {
 
   const handleAddHoliday = () => {
     if (newHolidayDate && newHolidayName) {
-      addHoliday({ date: newHolidayDate, name: newHolidayName });
+      const holiday: { date: string; endDate?: string; name: string } = {
+        date: newHolidayDate,
+        name: newHolidayName,
+      };
+      if (isRangeMode && newHolidayEndDate && newHolidayEndDate > newHolidayDate) {
+        holiday.endDate = newHolidayEndDate;
+      }
+      addHoliday(holiday);
       setNewHolidayDate('');
+      setNewHolidayEndDate('');
       setNewHolidayName('');
     }
   };
@@ -247,19 +257,51 @@ export default function SettingsPage() {
       {/* Holidays */}
       <section className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
         <h4 className="text-sm font-semibold text-gray-700 mb-3">공휴일 / 휴원일 관리</h4>
-        <div className="flex gap-2 mb-3">
-          <input
-            type="date"
-            value={newHolidayDate}
-            onChange={e => setNewHolidayDate(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
-          />
+        <div className="flex gap-2 mb-2">
+          <button
+            onClick={() => setIsRangeMode(false)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
+              !isRangeMode ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            단일 날짜
+          </button>
+          <button
+            onClick={() => setIsRangeMode(true)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
+              isRangeMode ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            기간 설정
+          </button>
+        </div>
+        <div className="flex gap-2 mb-3 flex-wrap">
+          <div className="flex items-center gap-1">
+            <input
+              type="date"
+              value={newHolidayDate}
+              onChange={e => setNewHolidayDate(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            />
+            {isRangeMode && (
+              <>
+                <span className="text-gray-400 text-sm px-1">~</span>
+                <input
+                  type="date"
+                  value={newHolidayEndDate}
+                  onChange={e => setNewHolidayEndDate(e.target.value)}
+                  min={newHolidayDate}
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </>
+            )}
+          </div>
           <input
             type="text"
-            placeholder="명칭 (예: 설날)"
+            placeholder="명칭 (예: 설날, 여름방학)"
             value={newHolidayName}
             onChange={e => setNewHolidayName(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm flex-1"
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm flex-1 min-w-[150px]"
           />
           <button
             onClick={handleAddHoliday}
@@ -271,10 +313,20 @@ export default function SettingsPage() {
         <div className="space-y-1">
           {holidays.sort((a, b) => a.date.localeCompare(b.date)).map(h => (
             <div key={h.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-              <span className="text-sm text-gray-700">{h.date} - {h.name}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-700">
+                  {h.endDate ? `${h.date} ~ ${h.endDate}` : h.date}
+                </span>
+                <span className="text-sm font-medium text-gray-900">{h.name}</span>
+                {h.endDate && (
+                  <span className="text-xs text-gray-400">
+                    ({Math.round((new Date(h.endDate).getTime() - new Date(h.date).getTime()) / (1000 * 60 * 60 * 24)) + 1}일간)
+                  </span>
+                )}
+              </div>
               <button
                 onClick={() => removeHoliday(h.id)}
-                className="text-xs text-red-500 hover:text-red-700"
+                className="text-xs text-red-500 hover:text-red-700 shrink-0"
               >
                 삭제
               </button>

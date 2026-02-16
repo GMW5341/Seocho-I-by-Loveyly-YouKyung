@@ -3,7 +3,7 @@ import { format, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useAppStore } from '../../store/StoreContext';
 import type { Payment } from '../../types';
-import { formatCurrency, calculateNextPaymentDate } from '../../utils/helpers';
+import { formatCurrency, calculateNextPaymentDate, expandHolidayDates } from '../../utils/helpers';
 import Modal from '../common/Modal';
 import Badge from '../common/Badge';
 import PaymentForm from './PaymentForm';
@@ -28,7 +28,7 @@ export default function PaymentManager() {
       // Calculate next payment date
       let nextPaymentDate: string | null = null;
       if (activePayment) {
-        const holidayDates = holidays.map(h => h.date);
+        const holidayDates = expandHolidayDates(holidays);
         const studentAttendance = attendance
           .filter(r => r.studentId === student.id)
           .map(r => ({ date: r.date, status: r.status }));
