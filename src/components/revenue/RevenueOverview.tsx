@@ -3,9 +3,10 @@ import { format, parseISO, startOfMonth, endOfMonth, startOfYear, endOfYear, isW
 import { ko } from 'date-fns/locale';
 import { useAppStore } from '../../store/StoreContext';
 import { formatCurrency } from '../../utils/helpers';
+import { exportRevenueToExcel } from '../../utils/excelExport';
 
 export default function RevenueOverview() {
-  const { payments, trialLessons, specialClasses, specialClassStudents } = useAppStore();
+  const { payments, trialLessons, specialClasses, specialClassStudents, students, trialStudents } = useAppStore();
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
 
   const revenueData = useMemo(() => {
@@ -152,12 +153,28 @@ export default function RevenueOverview() {
           <h3 className="text-lg font-bold text-gray-800">매출 현황</h3>
           <p className="text-sm text-gray-500">학원 전체 매출 통계</p>
         </div>
-        <input
-          type="month"
-          value={selectedMonth}
-          onChange={e => setSelectedMonth(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
-        />
+        <div className="flex gap-2 items-center">
+          <input
+            type="month"
+            value={selectedMonth}
+            onChange={e => setSelectedMonth(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          />
+          <button
+            onClick={() => exportRevenueToExcel({
+              selectedMonth,
+              payments,
+              trialLessons,
+              specialClassStudents,
+              specialClasses,
+              students,
+              trialStudents,
+            })}
+            className="border border-emerald-300 text-emerald-700 bg-emerald-50 px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-100 whitespace-nowrap"
+          >
+            엑셀 다운로드
+          </button>
+        </div>
       </div>
 
       {/* Total Revenue Cards */}

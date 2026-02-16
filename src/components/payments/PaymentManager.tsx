@@ -4,6 +4,7 @@ import { ko } from 'date-fns/locale';
 import { useAppStore } from '../../store/StoreContext';
 import type { Payment } from '../../types';
 import { formatCurrency, calculateNextPaymentDate, expandHolidayDates } from '../../utils/helpers';
+import { exportPaymentsToExcel } from '../../utils/excelExport';
 import Modal from '../common/Modal';
 import Badge from '../common/Badge';
 import PaymentForm from './PaymentForm';
@@ -77,12 +78,20 @@ export default function PaymentManager() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-lg font-bold text-gray-800">결제 관리</h3>
-        <button
-          onClick={() => setShowForm(true)}
-          className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"
-        >
-          + 결제 등록
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => exportPaymentsToExcel(payments, students)}
+            className="border border-emerald-300 text-emerald-700 bg-emerald-50 px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-100"
+          >
+            엑셀 다운로드
+          </button>
+          <button
+            onClick={() => setShowForm(true)}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"
+          >
+            + 결제 등록
+          </button>
+        </div>
       </div>
 
       {/* Summary */}
