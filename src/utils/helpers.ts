@@ -164,6 +164,52 @@ export function calculateNextPaymentDate(
   return null;
 }
 
+/**
+ * 결제 차수 기준 마지막 수업 예정일 계산
+ * totalSessions 번째 수업이 일어나는 날짜를 반환
+ */
+export function calculateLastClassDate(
+  startDate: string,
+  totalSessions: number,
+  regularSchedule: { day: DayOfWeek; startTime: string }[],
+  holidays: string[],
+  attendanceRecords: { date: string; status: string }[]
+): string | null {
+  const regularDays = regularSchedule.map(entry => entry.day);
+  if (regularDays.length === 0) return null;
+
+  let sessionsCount = 0;
+  const start = parseISO(startDate);
+  const currentDate = new Date(start);
+
+  const maxDays = 365;
+  for (let i = 0; i < maxDays; i++) {
+    currentDate.setDate(currentDate.getDate() + 1);
+    const dateStr = format(currentDate, 'yyyy-MM-dd');
+    const dayOfWeek = getDayOfWeekFromDate(dateStr);
+    const isHoliday = holidays.includes(dateStr);
+    const isRegularDay = dayOfWeek && regularDays.includes(dayOfWeek);
+    const record = attendanceRecords.find(r => r.date === dateStr);
+
+    let shouldCount = false;
+
+    if (record && (record.status === '출석' || record.status === '보강')) {
+      shouldCount = true;
+    } else if (!record && isRegularDay && !isHoliday) {
+      shouldCount = true;
+    }
+
+    if (shouldCount) {
+      sessionsCount++;
+    }
+
+    if (sessionsCount >= totalSessions) {
+      return dateStr;
+    }
+  }
+  return null;
+}
+
 export function getClassLevelColor(level: string): string {
   switch (level) {
     case '유아반': return 'bg-pink-100 text-pink-800 border-pink-300';

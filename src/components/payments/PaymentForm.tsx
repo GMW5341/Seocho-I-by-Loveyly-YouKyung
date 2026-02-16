@@ -31,12 +31,12 @@ export default function PaymentForm({ students, settings, payment, onSubmit, onC
 
   // Auto-calculate original price based on sessions and duration
   useEffect(() => {
-    if (!payment && !manualAmount) {
+    if (!manualAmount) {
       const basePrice = settings.pricing[classDuration];
       const calculated = getPricePerSession(basePrice, totalSessions);
       setOriginalAmount(calculated);
     }
-  }, [totalSessions, classDuration, settings.pricing, payment, manualAmount]);
+  }, [totalSessions, classDuration, settings.pricing, manualAmount]);
 
   // Apply discount to calculate final amount
   useEffect(() => {

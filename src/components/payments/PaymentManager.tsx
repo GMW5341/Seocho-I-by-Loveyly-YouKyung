@@ -3,7 +3,7 @@ import { format, parseISO, differenceInCalendarDays } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useAppStore } from '../../store/StoreContext';
 import type { Payment } from '../../types';
-import { formatCurrency, calculateNextPaymentDate, expandHolidayDates } from '../../utils/helpers';
+import { formatCurrency, calculateLastClassDate, expandHolidayDates } from '../../utils/helpers';
 import { exportPaymentsToExcel } from '../../utils/excelExport';
 import Modal from '../common/Modal';
 import Badge from '../common/Badge';
@@ -26,14 +26,14 @@ export default function PaymentManager() {
         .filter(p => p.completed || p.remainingSessions === 0)
         .sort((a, b) => b.paidAt.localeCompare(a.paidAt))[0];
 
-      // Calculate next payment date
-      let nextPaymentDate: string | null = null;
+      // Calculate last class date for this payment cycle
+      let lastClassDate: string | null = null;
       if (activePayment) {
         const holidayDates = expandHolidayDates(holidays);
         const studentAttendance = attendance
           .filter(r => r.studentId === student.id)
           .map(r => ({ date: r.date, status: r.status }));
-        nextPaymentDate = calculateNextPaymentDate(
+        lastClassDate = calculateLastClassDate(
           activePayment.startDate,
           activePayment.totalSessions,
           student.regularSchedule || [],
@@ -47,7 +47,7 @@ export default function PaymentManager() {
         activePayment,
         lastPayment,
         allPayments: studentPayments,
-        nextPaymentDate,
+        lastClassDate,
         hasPayment: !!activePayment,
         isExpiring: activePayment ? activePayment.remainingSessions <= 1 : false,
       };
@@ -69,7 +69,12 @@ export default function PaymentManager() {
 
   const handleEditPayment = (data: Omit<Payment, 'id' | 'usedSessions' | 'remainingSessions' | 'completed'>) => {
     if (editingPayment) {
-      updatePayment(editingPayment.id, data);
+      const newRemaining = Math.max(0, data.totalSessions - editingPayment.usedSessions);
+      updatePayment(editingPayment.id, {
+        ...data,
+        remainingSessions: newRemaining,
+        completed: newRemaining <= 0,
+      });
       setEditingPayment(undefined);
     }
   };
@@ -147,7 +152,7 @@ export default function PaymentManager() {
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">잔여</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">결제방식</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">결제일</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">다음 결제 예정</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">마지막 수업일</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">관리</th>
             </tr>
           </thead>
@@ -183,24 +188,26 @@ export default function PaymentManager() {
                   {data.activePayment ? format(parseISO(data.activePayment.paidAt), 'MM/dd', { locale: ko }) : '-'}
                 </td>
                 <td className="px-4 py-3 text-sm">
-                  {data.nextPaymentDate ? (() => {
-                    const daysLeft = differenceInCalendarDays(parseISO(data.nextPaymentDate), new Date());
-                    const isOverdue = daysLeft <= 0;
-                    const isImminent = daysLeft > 0 && daysLeft <= 7;
-                    const isSoon = daysLeft > 7 && daysLeft <= 14;
+                  {data.lastClassDate ? (() => {
+                    const daysLeft = differenceInCalendarDays(parseISO(data.lastClassDate), new Date());
+                    const isPast = daysLeft < 0;
+                    const isToday = daysLeft === 0;
+                    const isSoon = daysLeft > 0 && daysLeft <= 7;
                     return (
                       <div className="flex flex-col">
                         <span className={`font-medium ${
-                          isOverdue ? 'text-red-600' : isImminent ? 'text-amber-600' : isSoon ? 'text-yellow-600' : 'text-gray-700'
+                          isPast ? 'text-red-600' : isToday ? 'text-amber-600' : isSoon ? 'text-yellow-600' : 'text-gray-700'
                         }`}>
-                          {format(parseISO(data.nextPaymentDate), 'MM/dd (EEE)', { locale: ko })}
+                          {format(parseISO(data.lastClassDate), 'MM/dd (EEE)', { locale: ko })}
                         </span>
                         <span className={`text-xs mt-0.5 ${
-                          isOverdue ? 'text-red-500 font-semibold' : isImminent ? 'text-amber-500 font-medium' : 'text-gray-400'
+                          isPast ? 'text-red-500 font-semibold' : isToday ? 'text-amber-500 font-medium' : isSoon ? 'text-yellow-500' : 'text-gray-400'
                         }`}>
-                          {isOverdue
-                            ? (daysLeft === 0 ? '오늘 결제 필요' : `${Math.abs(daysLeft)}일 지남`)
-                            : `D-${daysLeft}`
+                          {isPast
+                            ? `${Math.abs(daysLeft)}일 지남`
+                            : isToday
+                              ? '오늘 마지막'
+                              : `D-${daysLeft}`
                           }
                         </span>
                       </div>
