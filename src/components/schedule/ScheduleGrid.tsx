@@ -425,9 +425,9 @@ export default function ScheduleGrid() {
 
       {/* Legend */}
       <div className="flex gap-4 mb-4 text-xs flex-wrap">
-        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-amber-200 border border-amber-300" /> 60분</div>
-        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-sky-200 border border-sky-300" /> 80분</div>
-        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-violet-200 border border-violet-300" /> 100분</div>
+        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-[#00FFFF] border border-[#00FFFF]" /> 60분</div>
+        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-[#FFD4F9] border border-[#FFD4F9]" /> 80분</div>
+        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-[#FFF200] border border-[#FFF200]" /> 100분</div>
         <div className="flex items-center gap-1 ml-4"><div className="w-3 h-3 rounded border-2 border-dashed border-orange-400" /> 보강</div>
         <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-emerald-200 border-2 border-emerald-400" /> 체험</div>
         <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-rose-200 border-2 border-rose-400" /> 특강</div>

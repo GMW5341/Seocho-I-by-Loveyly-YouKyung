@@ -150,7 +150,7 @@ export function getClassLevelColor(level: string): string {
 export function getDurationColor(duration: number): string {
   switch (duration) {
     case 60: return 'bg-[#00FFFF]/25 border-[#00FFFF]';
-    case 80: return 'bg-[#FF00FF]/25 border-[#FF00FF]';
+    case 80: return 'bg-[#FFD4F9]/25 border-[#FFD4F9]';
     case 100: return 'bg-[#FFF200]/25 border-[#FFF200]';
     default: return 'bg-gray-50 border-gray-300';
   }
