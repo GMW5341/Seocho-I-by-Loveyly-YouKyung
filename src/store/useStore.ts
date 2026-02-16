@@ -6,7 +6,7 @@ import type {
   SpecialClass, SpecialClassStudent
 } from '../types';
 import { DEFAULT_SETTINGS } from '../utils/helpers';
-import { pushToCloud, isSyncEnabled, initSyncOnStartup, checkUrlForSyncConfig, setupSync, hasReceivedInitialSnapshot } from '../services/firebaseSync';
+import { pushToCloud, isSyncEnabled, startRealtimeSync, hasReceivedInitialSnapshot } from '../services/firebaseSync';
 
 const STORAGE_KEYS = {
   students: 'seocho_students',
@@ -91,20 +91,12 @@ export function useStore() {
     }, 1000);
   }, []);
 
-  // Initialize cloud sync on startup (or auto-setup from shared URL)
+  // Start real-time listener for changes from OTHER devices
+  // (Initial data was already loaded by CloudDataLoader before React rendered)
   useEffect(() => {
-    const urlSync = checkUrlForSyncConfig();
-    if (urlSync && !isSyncEnabled()) {
-      // Auto-configure sync from shared URL
-      setupSync(urlSync.config, urlSync.room, () => {
-        window.location.reload();
-      });
-      // Clean the URL hash
-      history.replaceState(null, '', window.location.pathname);
-      return;
-    }
-    initSyncOnStartup(() => {
-      // Cloud data received - reload to pick up changes
+    if (!isSyncEnabled()) return;
+    startRealtimeSync(() => {
+      // Another device changed data - reload to pick up changes
       window.location.reload();
     });
   }, []);

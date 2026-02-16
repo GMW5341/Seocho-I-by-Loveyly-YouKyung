@@ -1,6 +1,6 @@
 import { initializeApp, getApps, deleteApp, type FirebaseApp } from 'firebase/app';
 import {
-  getFirestore, doc, setDoc, onSnapshot, type Firestore, type Unsubscribe,
+  getFirestore, doc, setDoc, getDoc, onSnapshot, type Firestore, type Unsubscribe,
 } from 'firebase/firestore';
 
 // All localStorage keys used by the app
@@ -112,7 +112,59 @@ export async function pushToCloud(): Promise<boolean> {
   }
 }
 
-/** Start real-time listening for changes from Firestore */
+/**
+ * Fetch cloud data ONCE and apply to localStorage.
+ * Called BEFORE React renders so state initializes with cloud data.
+ * Returns true if cloud data was applied.
+ */
+export async function fetchCloudData(): Promise<boolean> {
+  const config = getSyncConfig();
+  const room = getSyncRoom();
+  if (!config || !room) return false;
+  if (!initFirebase(config)) return false;
+  if (!db) return false;
+
+  try {
+    const docRef = doc(db, 'academies', room);
+    const snapshot = await getDoc(docRef);
+
+    if (!snapshot.exists()) {
+      // No cloud data - push local data up
+      await pushToCloud();
+      return false;
+    }
+
+    const cloudData = snapshot.data();
+    if (!cloudData) return false;
+
+    const hasCloudData = ALL_STORAGE_KEYS.some(key => cloudData[key] !== undefined);
+    if (!hasCloudData) {
+      // Cloud doc exists but no real data - push local data up
+      await pushToCloud();
+      return false;
+    }
+
+    // Apply cloud data to localStorage
+    ALL_STORAGE_KEYS.forEach(key => {
+      const cloudVal = cloudData[key] as string | undefined;
+      if (cloudVal !== undefined) {
+        localStorage.setItem(key, cloudVal);
+      }
+    });
+
+    // Set lastPushTimestamp so the realtime listener doesn't re-trigger
+    if (cloudData._updatedAt) {
+      lastPushTimestamp = cloudData._updatedAt as string;
+    }
+
+    return true;
+  } catch (e) {
+    console.error('Fetch cloud data failed:', e);
+    return false;
+  }
+}
+
+/** Start real-time listening for changes from OTHER devices (after initial load) */
 export function startRealtimeSync(onDataReceived?: () => void): boolean {
   const config = getSyncConfig();
   const room = getSyncRoom();
@@ -129,32 +181,12 @@ export function startRealtimeSync(onDataReceived?: () => void): boolean {
   unsubscribe = onSnapshot(docRef, (snapshot) => {
     initialSnapshotReceived = true;
 
-    // If data was just imported via JSON, push local data to cloud instead of pulling
-    const justImported = localStorage.getItem('seocho_just_imported');
-    if (justImported) {
-      localStorage.removeItem('seocho_just_imported');
-      pushToCloud();
-      return;
-    }
-
-    if (!snapshot.exists()) {
-      // No cloud doc at all - push local data
-      pushToCloud();
-      return;
-    }
+    if (!snapshot.exists()) return;
     const cloudData = snapshot.data();
     if (!cloudData) return;
 
-    // Skip our own writes by comparing timestamp
+    // Skip our own writes
     if (cloudData._updatedAt && cloudData._updatedAt === lastPushTimestamp) return;
-
-    // Check if cloud has actual app data (not just _connectionTest)
-    const hasCloudData = ALL_STORAGE_KEYS.some(key => cloudData[key] !== undefined);
-    if (!hasCloudData) {
-      // Cloud doc exists but has no real data - push local data
-      pushToCloud();
-      return;
-    }
 
     // Apply cloud data to localStorage
     let changed = false;

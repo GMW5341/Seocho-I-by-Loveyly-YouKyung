@@ -13,6 +13,10 @@ import MessageTemplates from './components/messages/MessageTemplates';
 import SpecialClassManager from './components/special/SpecialClassManager';
 import RevenueOverview from './components/revenue/RevenueOverview';
 import SettingsPage from './components/settings/SettingsPage';
+import {
+  isSyncEnabled, fetchCloudData, pushToCloud, checkUrlForSyncConfig,
+  saveSyncConfig, saveSyncRoom, setSyncEnabled,
+} from './services/firebaseSync';
 
 const TAB_TITLES: Record<string, string> = {
   curriculum: '커리큘럼',
@@ -97,10 +101,78 @@ function AppContent() {
   );
 }
 
-export default function App() {
+/**
+ * CloudDataLoader: Loads cloud data BEFORE React state initializes.
+ * This eliminates the race condition where empty local data overwrites cloud data.
+ */
+function CloudDataLoader() {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadData() {
+      try {
+        // 1. Check URL for shared sync config (e.g., from mobile link)
+        const urlSync = checkUrlForSyncConfig();
+        if (urlSync) {
+          saveSyncConfig(urlSync.config);
+          saveSyncRoom(urlSync.room);
+          setSyncEnabled(true);
+          history.replaceState(null, '', window.location.pathname);
+        }
+
+        // 2. If sync is enabled, load cloud data into localStorage FIRST
+        if (isSyncEnabled()) {
+          const justImported = localStorage.getItem('seocho_just_imported');
+          if (justImported) {
+            // Data was just imported via JSON - push local to cloud, don't pull
+            localStorage.removeItem('seocho_just_imported');
+            await pushToCloud();
+          } else {
+            // Normal startup: fetch cloud data → write to localStorage
+            await fetchCloudData();
+          }
+        }
+      } catch (e) {
+        console.error('Cloud data load failed, using local data:', e);
+      }
+
+      if (!cancelled) setReady(true);
+    }
+
+    // Timeout: if cloud takes too long, proceed with local data
+    const timeout = setTimeout(() => {
+      if (!cancelled) {
+        console.warn('Cloud data load timed out, using local data');
+        setReady(true);
+      }
+    }, 5000);
+
+    loadData().finally(() => clearTimeout(timeout));
+
+    return () => { cancelled = true; };
+  }, []);
+
+  if (!ready) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-3" />
+          <p className="text-sm text-gray-500">데이터 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. NOW render the app - React state will initialize from localStorage (which has cloud data)
   return (
     <StoreProvider>
       <AppContent />
     </StoreProvider>
   );
+}
+
+export default function App() {
+  return <CloudDataLoader />;
 }
