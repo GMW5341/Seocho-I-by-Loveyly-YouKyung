@@ -107,6 +107,7 @@ function AppContent() {
  */
 function CloudDataLoader() {
   const [ready, setReady] = useState(false);
+  const [status, setStatus] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -122,32 +123,34 @@ function CloudDataLoader() {
           history.replaceState(null, '', window.location.pathname);
         }
 
-        // 2. If sync is enabled, load cloud data into localStorage FIRST
+        // 2. If sync is enabled, try to load cloud data
         if (isSyncEnabled()) {
           const justImported = localStorage.getItem('seocho_just_imported');
           if (justImported) {
-            // Data was just imported via JSON - push local to cloud, don't pull
+            if (!cancelled) setStatus('가져온 데이터 업로드 중...');
             localStorage.removeItem('seocho_just_imported');
-            await pushToCloud();
+            const ok = await pushToCloud();
+            if (!ok) console.warn('Push after import failed, continuing with local data');
           } else {
-            // Normal startup: fetch cloud data → write to localStorage
+            if (!cancelled) setStatus('클라우드 데이터 확인 중...');
             await fetchCloudData();
           }
         }
       } catch (e) {
-        console.error('Cloud data load failed, using local data:', e);
+        console.error('Cloud sync error, proceeding with local data:', e);
       }
 
+      // Always proceed to render, regardless of sync result
       if (!cancelled) setReady(true);
     }
 
-    // Timeout: if cloud takes too long, proceed with local data
+    // Timeout: if cloud takes too long (3s), proceed with local data
     const timeout = setTimeout(() => {
-      if (!cancelled) {
-        console.warn('Cloud data load timed out, using local data');
+      if (!cancelled && !ready) {
+        console.warn('Cloud load timed out, using local data');
         setReady(true);
       }
-    }, 5000);
+    }, 3000);
 
     loadData().finally(() => clearTimeout(timeout));
 
@@ -159,13 +162,12 @@ function CloudDataLoader() {
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-3" />
-          <p className="text-sm text-gray-500">데이터 불러오는 중...</p>
+          <p className="text-sm text-gray-500">{status || '데이터 불러오는 중...'}</p>
         </div>
       </div>
     );
   }
 
-  // 3. NOW render the app - React state will initialize from localStorage (which has cloud data)
   return (
     <StoreProvider>
       <AppContent />

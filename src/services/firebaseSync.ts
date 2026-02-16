@@ -98,6 +98,11 @@ function gatherLocalData(): Record<string, string> {
 
 /** Push current localStorage data to Firestore */
 export async function pushToCloud(): Promise<boolean> {
+  // Auto-initialize Firebase if needed
+  if (!db) {
+    const config = getSyncConfig();
+    if (!config || !initFirebase(config)) return false;
+  }
   if (!db) return false;
   const room = getSyncRoom();
   if (!room) return false;

@@ -95,10 +95,14 @@ export function useStore() {
   // (Initial data was already loaded by CloudDataLoader before React rendered)
   useEffect(() => {
     if (!isSyncEnabled()) return;
-    startRealtimeSync(() => {
-      // Another device changed data - reload to pick up changes
-      window.location.reload();
-    });
+    try {
+      startRealtimeSync(() => {
+        // Another device changed data - reload to pick up changes
+        window.location.reload();
+      });
+    } catch (e) {
+      console.error('Realtime sync start failed:', e);
+    }
   }, []);
 
   // Persist to localStorage on changes + trigger cloud sync
