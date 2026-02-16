@@ -85,7 +85,7 @@ export default function MakeupForm({ students, onSubmit, onCancel }: MakeupFormP
 
       {selectedStudent && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
-          {selectedStudent.name} | 정규: {selectedStudent.regularDays.join(', ')}요일 {selectedStudent.regularStartTime} ({selectedStudent.classDuration}분)
+          {selectedStudent.name} | 정규: {selectedStudent.regularDays.map(d => `${d} ${selectedStudent.regularStartTimes[d] || ''}`).join(', ')} ({selectedStudent.classDuration}분)
         </div>
       )}
 

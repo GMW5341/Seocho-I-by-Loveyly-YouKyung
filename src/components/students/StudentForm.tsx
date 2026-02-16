@@ -17,15 +17,33 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
   const [classDuration, setClassDuration] = useState<ClassDuration>(student?.classDuration || 60);
   const [sessionsPerWeek, setSessionsPerWeek] = useState(student?.sessionsPerWeek || 1);
   const [regularDays, setRegularDays] = useState<DayOfWeek[]>(student?.regularDays || []);
-  const [regularStartTime, setRegularStartTime] = useState(student?.regularStartTime || '14:00');
+  const [regularStartTimes, setRegularStartTimes] = useState<{ [key in DayOfWeek]?: string }>(
+    student?.regularStartTimes || {}
+  );
   const [phone, setPhone] = useState(student?.phone || '');
   const [parentPhone, setParentPhone] = useState(student?.parentPhone || '');
   const [memo, setMemo] = useState(student?.memo || '');
 
   const toggleDay = (day: DayOfWeek) => {
-    setRegularDays(prev =>
-      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
-    );
+    setRegularDays(prev => {
+      if (prev.includes(day)) {
+        // 요일 제거 시 해당 요일 시간도 제거
+        setRegularStartTimes(times => {
+          const updated = { ...times };
+          delete updated[day];
+          return updated;
+        });
+        return prev.filter(d => d !== day);
+      } else {
+        // 요일 추가 시 기본 시간 설정
+        setRegularStartTimes(times => ({ ...times, [day]: '14:00' }));
+        return [...prev, day];
+      }
+    });
+  };
+
+  const updateTimeForDay = (day: DayOfWeek, time: string) => {
+    setRegularStartTimes(prev => ({ ...prev, [day]: time }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -37,7 +55,7 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
       classDuration,
       sessionsPerWeek,
       regularDays,
-      regularStartTime,
+      regularStartTimes,
       phone,
       parentPhone,
       memo,
@@ -121,15 +139,34 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
         </div>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">정규 수업 시작 시간</label>
-        <input
-          type="time"
-          value={regularStartTime}
-          onChange={e => setRegularStartTime(e.target.value)}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-        />
-      </div>
+      {/* 요일별 수업 시작 시간 */}
+      {regularDays.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            정규 수업 시작 시간
+            {regularDays.length > 1 && (
+              <span className="text-xs text-gray-400 ml-1">(요일별 개별 설정)</span>
+            )}
+          </label>
+          <div className="space-y-2">
+            {regularDays
+              .sort((a, b) => DAYS_OF_WEEK.indexOf(a) - DAYS_OF_WEEK.indexOf(b))
+              .map(day => (
+              <div key={day} className="flex items-center gap-3">
+                <span className="w-8 text-center text-sm font-medium text-indigo-600 bg-indigo-50 rounded py-1">
+                  {day}
+                </span>
+                <input
+                  type="time"
+                  value={regularStartTimes[day] || '14:00'}
+                  onChange={e => updateTimeForDay(day, e.target.value)}
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <div>

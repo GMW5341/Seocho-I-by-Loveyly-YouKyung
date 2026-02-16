@@ -30,7 +30,7 @@ export default function StudentList() {
       addSchedule({
         studentId: newStudent.id,
         dayOfWeek: day,
-        startTime: data.regularStartTime,
+        startTime: data.regularStartTimes[day] || '14:00',
         duration: data.classDuration,
         isRegular: true,
       });
@@ -119,7 +119,15 @@ export default function StudentList() {
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">{student.classDuration}분</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{student.regularDays.join(', ')}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{student.regularStartTime}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">
+                    {student.regularDays.map(day => (
+                      <span key={day}>
+                        {student.regularDays.length > 1 ? `${day} ` : ''}
+                        {student.regularStartTimes[day] || '-'}
+                        {student.regularDays.indexOf(day) < student.regularDays.length - 1 ? ' / ' : ''}
+                      </span>
+                    ))}
+                  </td>
                   <td className="px-4 py-3">
                     <Badge variant={paymentStatus.variant}>{paymentStatus.label}</Badge>
                   </td>

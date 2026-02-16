@@ -17,7 +17,7 @@ export interface Student {
   classDuration: ClassDuration;
   sessionsPerWeek: number; // 주 1회 or 2회
   regularDays: DayOfWeek[];
-  regularStartTime: string; // "HH:mm"
+  regularStartTimes: { [key in DayOfWeek]?: string }; // 요일별 "HH:mm"
   phone: string;
   parentPhone: string;
   memo: string;

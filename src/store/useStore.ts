@@ -30,7 +30,23 @@ function saveToStorage<T>(key: string, data: T): void {
 
 export function useStore() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
-  const [students, setStudents] = useState<Student[]>(() => loadFromStorage(STORAGE_KEYS.students, []));
+  const [students, setStudents] = useState<Student[]>(() => {
+    const loaded = loadFromStorage<(Student & { regularStartTime?: string })[]>(STORAGE_KEYS.students, []);
+    // 기존 regularStartTime → regularStartTimes 마이그레이션
+    return loaded.map(s => {
+      if (!s.regularStartTimes && (s as { regularStartTime?: string }).regularStartTime) {
+        const oldTime = (s as { regularStartTime?: string }).regularStartTime!;
+        const times: { [key: string]: string } = {};
+        (s.regularDays || []).forEach(day => { times[day] = oldTime; });
+        const { regularStartTime: _, ...rest } = s as Student & { regularStartTime?: string };
+        return { ...rest, regularStartTimes: times } as Student;
+      }
+      if (!s.regularStartTimes) {
+        return { ...s, regularStartTimes: {} } as Student;
+      }
+      return s as Student;
+    });
+  });
   const [schedules, setSchedules] = useState<ScheduleSlot[]>(() => loadFromStorage(STORAGE_KEYS.schedules, []));
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(() => loadFromStorage(STORAGE_KEYS.attendance, []));
   const [payments, setPayments] = useState<Payment[]>(() => loadFromStorage(STORAGE_KEYS.payments, []));

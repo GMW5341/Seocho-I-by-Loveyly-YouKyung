@@ -58,7 +58,7 @@ export default function AttendanceManager() {
         studentId,
         date,
         status,
-        startTime: student.regularStartTime,
+        startTime: student.regularStartTimes[getDayOfWeekFromDate(date) as DayOfWeek] || Object.values(student.regularStartTimes)[0] || '14:00',
         duration: student.classDuration,
         isMakeup: status === '보강',
         memo: '',
