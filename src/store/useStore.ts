@@ -6,7 +6,7 @@ import type {
   SpecialClass, SpecialClassStudent
 } from '../types';
 import { DEFAULT_SETTINGS } from '../utils/helpers';
-import { pushToCloud, isSyncEnabled, initSyncOnStartup, checkUrlForSyncConfig, setupSync } from '../services/firebaseSync';
+import { pushToCloud, isSyncEnabled, initSyncOnStartup, checkUrlForSyncConfig, setupSync, hasReceivedInitialSnapshot } from '../services/firebaseSync';
 
 const STORAGE_KEYS = {
   students: 'seocho_students',
@@ -79,12 +79,16 @@ export function useStore() {
   const [specialClassStudents, setSpecialClassStudents] = useState<SpecialClassStudent[]>(() => loadFromStorage(STORAGE_KEYS.specialClassStudents, []));
   const [logoDataUrl, setLogoDataUrl] = useState<string>(() => loadFromStorage(STORAGE_KEYS.logoDataUrl, ''));
 
-  // Cloud sync: debounced push
+  // Cloud sync: debounced push (only after initial snapshot received to prevent empty data overwrite)
   const cloudSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleCloudPush = useCallback(() => {
     if (!isSyncEnabled()) return;
     if (cloudSyncTimer.current) clearTimeout(cloudSyncTimer.current);
-    cloudSyncTimer.current = setTimeout(() => { pushToCloud(); }, 1000);
+    cloudSyncTimer.current = setTimeout(() => {
+      if (hasReceivedInitialSnapshot()) {
+        pushToCloud();
+      }
+    }, 1000);
   }, []);
 
   // Initialize cloud sync on startup (or auto-setup from shared URL)

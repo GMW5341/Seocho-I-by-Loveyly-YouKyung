@@ -28,6 +28,12 @@ let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
 let unsubscribe: Unsubscribe | null = null;
 let lastPushTimestamp = '';
+let initialSnapshotReceived = false;
+
+/** Check if the first Firestore snapshot has been received (safe to push) */
+export function hasReceivedInitialSnapshot(): boolean {
+  return initialSnapshotReceived;
+}
 
 export function getSyncConfig(): FirebaseConfig | null {
   try {
@@ -117,9 +123,11 @@ export function startRealtimeSync(onDataReceived?: () => void): boolean {
 
   // Stop existing listener
   stopSync();
+  initialSnapshotReceived = false;
 
   const docRef = doc(db, 'academies', room);
   unsubscribe = onSnapshot(docRef, (snapshot) => {
+    initialSnapshotReceived = true;
     if (!snapshot.exists()) {
       // No cloud doc at all - push local data
       pushToCloud();
