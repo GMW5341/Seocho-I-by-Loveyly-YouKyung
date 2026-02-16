@@ -124,26 +124,39 @@ export function calculateNextPaymentDate(
   const maxDays = 365;
   for (let i = 0; i < maxDays; i++) {
     currentDate.setDate(currentDate.getDate() + 1);
-    const dayOfWeek = getDayOfWeekFromDate(format(currentDate, 'yyyy-MM-dd'));
+    const dateStr = format(currentDate, 'yyyy-MM-dd');
+    const dayOfWeek = getDayOfWeekFromDate(dateStr);
+    const isHoliday = holidays.includes(dateStr);
+    const isRegularDay = dayOfWeek && regularDays.includes(dayOfWeek);
+    const record = attendanceRecords.find(r => r.date === dateStr);
 
-    if (dayOfWeek && regularDays.includes(dayOfWeek)) {
-      const dateStr = format(currentDate, 'yyyy-MM-dd');
-      const isHoliday = holidays.includes(dateStr);
-      const record = attendanceRecords.find(r => r.date === dateStr);
+    let shouldCount = false;
 
-      if (!isHoliday && (!record || record.status === '출석' || record.status === '보강')) {
-        sessionsCount++;
-      }
+    // 실제 출석/보강 기록이 있으면 (정규일이든 아니든) 세션 소진
+    if (record && (record.status === '출석' || record.status === '보강')) {
+      shouldCount = true;
+    }
+    // 미래 정규 수업일: 공휴일이 아니고 출결 기록이 없으면 출석 예측
+    else if (!record && isRegularDay && !isHoliday) {
+      shouldCount = true;
+    }
+    // 결석: shouldCount = false → 다음 결제일이 밀림
+    // 공휴일(출결 기록 없음): shouldCount = false → 다음 결제일이 밀림
 
-      if (sessionsCount >= totalSessions) {
-        // Next class day after this
-        const nextDate = new Date(currentDate);
-        for (let j = 0; j < 30; j++) {
-          nextDate.setDate(nextDate.getDate() + 1);
-          const nextDay = getDayOfWeekFromDate(format(nextDate, 'yyyy-MM-dd'));
-          if (nextDay && regularDays.includes(nextDay)) {
-            return format(nextDate, 'yyyy-MM-dd');
-          }
+    if (shouldCount) {
+      sessionsCount++;
+    }
+
+    if (sessionsCount >= totalSessions) {
+      // 모든 세션 소진 후 다음 정규 수업일 찾기 (공휴일 제외)
+      const nextDate = new Date(currentDate);
+      for (let j = 0; j < 60; j++) {
+        nextDate.setDate(nextDate.getDate() + 1);
+        const nextDateStr = format(nextDate, 'yyyy-MM-dd');
+        const nextDay = getDayOfWeekFromDate(nextDateStr);
+        const nextIsHoliday = holidays.includes(nextDateStr);
+        if (nextDay && regularDays.includes(nextDay) && !nextIsHoliday) {
+          return nextDateStr;
         }
       }
     }

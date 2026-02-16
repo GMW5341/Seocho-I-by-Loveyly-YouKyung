@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, differenceInCalendarDays } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useAppStore } from '../../store/StoreContext';
 import type { Payment } from '../../types';
@@ -174,13 +174,29 @@ export default function PaymentManager() {
                   {data.activePayment ? format(parseISO(data.activePayment.paidAt), 'MM/dd', { locale: ko }) : '-'}
                 </td>
                 <td className="px-4 py-3 text-sm">
-                  {data.nextPaymentDate ? (
-                    <span className={`font-medium ${
-                      parseISO(data.nextPaymentDate) <= new Date() ? 'text-red-600' : 'text-gray-700'
-                    }`}>
-                      {format(parseISO(data.nextPaymentDate), 'MM/dd (EEE)', { locale: ko })}
-                    </span>
-                  ) : (
+                  {data.nextPaymentDate ? (() => {
+                    const daysLeft = differenceInCalendarDays(parseISO(data.nextPaymentDate), new Date());
+                    const isOverdue = daysLeft <= 0;
+                    const isImminent = daysLeft > 0 && daysLeft <= 7;
+                    const isSoon = daysLeft > 7 && daysLeft <= 14;
+                    return (
+                      <div className="flex flex-col">
+                        <span className={`font-medium ${
+                          isOverdue ? 'text-red-600' : isImminent ? 'text-amber-600' : isSoon ? 'text-yellow-600' : 'text-gray-700'
+                        }`}>
+                          {format(parseISO(data.nextPaymentDate), 'MM/dd (EEE)', { locale: ko })}
+                        </span>
+                        <span className={`text-xs mt-0.5 ${
+                          isOverdue ? 'text-red-500 font-semibold' : isImminent ? 'text-amber-500 font-medium' : 'text-gray-400'
+                        }`}>
+                          {isOverdue
+                            ? (daysLeft === 0 ? '오늘 결제 필요' : `${Math.abs(daysLeft)}일 지남`)
+                            : `D-${daysLeft}`
+                          }
+                        </span>
+                      </div>
+                    );
+                  })() : (
                     <span className="text-gray-400">-</span>
                   )}
                 </td>
