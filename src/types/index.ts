@@ -176,8 +176,10 @@ export interface SpecialClassStudent {
   parentPhone: string;
   paid: boolean;
   amount: number;
+  paymentMethod?: PaymentMethod;
+  paidAt?: string;
   memo: string;
   createdAt: string;
 }
 
-export type TabType = 'curriculum' | 'dashboard' | 'schedule' | 'students' | 'attendance' | 'payments' | 'trial' | 'messages' | 'special' | 'settings';
+export type TabType = 'curriculum' | 'dashboard' | 'schedule' | 'students' | 'attendance' | 'payments' | 'trial' | 'messages' | 'special' | 'revenue' | 'settings';

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { format, parseISO, startOfMonth, endOfMonth, startOfYear, endOfYear, isWithinInterval } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useAppStore } from '../../store/StoreContext';
 import type { Payment } from '../../types';
@@ -13,7 +13,6 @@ export default function PaymentManager() {
   const [showForm, setShowForm] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | undefined>();
   const [filterView, setFilterView] = useState<'active' | 'all' | 'unpaid'>('active');
-  const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
 
   const activeStudents = useMemo(() => students.filter(s => s.active), [students]);
 
@@ -54,38 +53,6 @@ export default function PaymentManager() {
     });
   }, [activeStudents, payments, attendance, holidays]);
 
-  // Monthly/yearly revenue
-  const monthlyRevenue = useMemo(() => {
-    const [year, month] = selectedMonth.split('-').map(Number);
-    const monthStart = startOfMonth(new Date(year, month - 1));
-    const monthEnd = endOfMonth(monthStart);
-    const yearStart = startOfYear(monthStart);
-    const yearEnd = endOfYear(monthStart);
-
-    const monthPayments = payments.filter(p => {
-      const date = parseISO(p.paidAt);
-      return isWithinInterval(date, { start: monthStart, end: monthEnd });
-    });
-    const yearPayments = payments.filter(p => {
-      const date = parseISO(p.paidAt);
-      return isWithinInterval(date, { start: yearStart, end: yearEnd });
-    });
-
-    const byMethod: Record<string, number> = {};
-    monthPayments.forEach(p => {
-      byMethod[p.method] = (byMethod[p.method] || 0) + p.amount;
-    });
-
-    return {
-      monthTotal: monthPayments.reduce((sum, p) => sum + p.amount, 0),
-      monthCount: monthPayments.length,
-      yearTotal: yearPayments.reduce((sum, p) => sum + p.amount, 0),
-      yearCount: yearPayments.length,
-      byMethod,
-      monthPayments,
-    };
-  }, [payments, selectedMonth]);
-
   const filteredData = useMemo(() => {
     switch (filterView) {
       case 'unpaid': return studentPaymentData.filter(d => !d.hasPayment);
@@ -118,25 +85,13 @@ export default function PaymentManager() {
         </button>
       </div>
 
-      {/* Revenue Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      {/* Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="flex items-center justify-between mb-1">
-            <h4 className="text-sm font-medium text-gray-500">월 매출</h4>
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={e => setSelectedMonth(e.target.value)}
-              className="text-xs border border-gray-200 rounded px-1 py-0.5"
-            />
+          <h4 className="text-sm font-medium text-gray-500 mb-1">결제 중</h4>
+          <div className="text-xl font-bold text-emerald-600">
+            {studentPaymentData.filter(d => d.hasPayment).length}명
           </div>
-          <div className="text-xl font-bold text-gray-900">{formatCurrency(monthlyRevenue.monthTotal)}</div>
-          <div className="text-xs text-gray-500">{monthlyRevenue.monthCount}건</div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <h4 className="text-sm font-medium text-gray-500 mb-1">연 매출</h4>
-          <div className="text-xl font-bold text-gray-900">{formatCurrency(monthlyRevenue.yearTotal)}</div>
-          <div className="text-xs text-gray-500">{monthlyRevenue.yearCount}건</div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <h4 className="text-sm font-medium text-gray-500 mb-1">미결제 원생</h4>
@@ -151,21 +106,6 @@ export default function PaymentManager() {
           </div>
         </div>
       </div>
-
-      {/* Payment method breakdown */}
-      {Object.keys(monthlyRevenue.byMethod).length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
-          <h4 className="text-sm font-medium text-gray-500 mb-3">결제 방식별 내역 ({selectedMonth})</h4>
-          <div className="flex flex-wrap gap-4">
-            {Object.entries(monthlyRevenue.byMethod).map(([method, amount]) => (
-              <div key={method} className="flex items-center gap-2">
-                <Badge variant="info">{method}</Badge>
-                <span className="text-sm font-medium text-gray-700">{formatCurrency(amount)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Filter */}
       <div className="flex gap-2 mb-4">

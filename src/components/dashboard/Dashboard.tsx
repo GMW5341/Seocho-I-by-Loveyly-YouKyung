@@ -124,8 +124,7 @@ export default function Dashboard() {
         };
       })
       .filter(a => !a.payment || a.remaining <= 2)
-      .sort((a, b) => a.remaining - b.remaining)
-      .slice(0, 10);
+      .sort((a, b) => a.remaining - b.remaining);
   }, [activeStudents, payments]);
 
   return (
@@ -206,6 +205,14 @@ export default function Dashboard() {
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
+                <text x="50%" y="45%" textAnchor="middle" dominantBaseline="central">
+                  <tspan x="50%" dy="-8" fontSize="20" fontWeight="bold" fill="#1f2937">
+                    {metrics.totalStudents}
+                  </tspan>
+                  <tspan x="50%" dy="20" fontSize="11" fill="#9ca3af">
+                    총 원생
+                  </tspan>
+                </text>
                 <Tooltip formatter={(value) => `${value}명`} />
                 <Legend
                   verticalAlign="bottom"

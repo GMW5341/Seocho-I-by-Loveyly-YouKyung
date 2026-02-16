@@ -1,11 +1,13 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '../../store/StoreContext';
-import type { SpecialClass, SpecialClassStudent, StudentGrade, DayOfWeek } from '../../types';
+import type { SpecialClass, SpecialClassStudent, StudentGrade, DayOfWeek, PaymentMethod } from '../../types';
+import { formatCurrency } from '../../utils/helpers';
 import Modal from '../common/Modal';
 import Badge from '../common/Badge';
 
 const DAYS: DayOfWeek[] = ['월', '화', '수', '목', '금', '토'];
 const GRADES: StudentGrade[] = ['6세', '7세', '초등1', '초등2', '초등3', '초등4', '초등5', '초등6'];
+const PAYMENT_METHODS: PaymentMethod[] = ['계좌이체', '현금', '카드', '온누리상품권', '기타'];
 
 export default function SpecialClassManager() {
   const {
@@ -29,6 +31,10 @@ export default function SpecialClassManager() {
   const [classFee, setClassFee] = useState(0);
   const [classMemo, setClassMemo] = useState('');
   const [classSchedule, setClassSchedule] = useState<{ day: DayOfWeek; startTime: string }[]>([]);
+
+  // Payment popup state
+  const [payingStudentId, setPayingStudentId] = useState<string | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>('계좌이체');
 
   // Student form state
   const [studentName, setStudentName] = useState('');
@@ -152,6 +158,25 @@ export default function SpecialClassManager() {
     setClassSchedule(prev => prev.map((entry, i) =>
       i === index ? { ...entry, [field]: value } : entry
     ));
+  };
+
+  const handleSpecialPayment = (studentId: string) => {
+    updateSpecialClassStudent(studentId, {
+      paid: true,
+      paidAt: new Date().toISOString(),
+      paymentMethod: selectedPaymentMethod,
+    });
+    setPayingStudentId(null);
+  };
+
+  const handleCancelPayment = (studentId: string) => {
+    if (confirm('결제를 취소하시겠습니까?')) {
+      updateSpecialClassStudent(studentId, {
+        paid: false,
+        paidAt: undefined,
+        paymentMethod: undefined,
+      });
+    }
   };
 
   const paidCount = classStudents.filter(s => s.paid).length;
@@ -298,16 +323,26 @@ export default function SpecialClassManager() {
                     <td className="px-4 py-3 text-sm text-gray-600">{student.grade}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">{student.parentPhone || '-'}</td>
                     <td className="px-4 py-3">
-                      <button
-                        onClick={() => updateSpecialClassStudent(student.id, { paid: !student.paid })}
-                        className="cursor-pointer"
-                      >
-                        <Badge variant={student.paid ? 'success' : 'danger'}>
-                          {student.paid ? '완료' : '미결제'}
-                        </Badge>
-                      </button>
+                      {student.paid ? (
+                        <button
+                          onClick={() => handleCancelPayment(student.id)}
+                          className="cursor-pointer"
+                          title="클릭하여 결제 취소"
+                        >
+                          <Badge variant="success">
+                            결제완료 ({student.paymentMethod || '-'})
+                          </Badge>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setPayingStudentId(student.id)}
+                          className="text-xs bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded-full font-medium hover:bg-red-100"
+                        >
+                          미결제 - 결제하기
+                        </button>
+                      )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{student.amount.toLocaleString()}원</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{formatCurrency(student.amount)}</td>
                     <td className="px-4 py-3 text-sm text-gray-500 max-w-[150px] truncate" title={student.memo}>{student.memo || '-'}</td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2">
@@ -462,6 +497,58 @@ export default function SpecialClassManager() {
               취소
             </button>
           </div>
+        </div>
+      </Modal>
+
+      {/* Payment Modal */}
+      <Modal isOpen={!!payingStudentId} onClose={() => setPayingStudentId(null)} title="특강 수업 결제">
+        <div className="space-y-4">
+          {payingStudentId && (() => {
+            const student = specialClassStudents.find(s => s.id === payingStudentId);
+            const cls = student ? specialClasses.find(c => c.id === student.specialClassId) : null;
+            if (!student) return null;
+            return (
+              <>
+                <div className="bg-gray-50 rounded-lg p-3 text-sm">
+                  <div className="font-medium text-gray-900">{student.name} ({student.grade})</div>
+                  {cls && <div className="text-gray-600">{cls.name}</div>}
+                  <div className="text-lg font-bold text-gray-900 mt-1">{formatCurrency(student.amount)}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">결제 방식</label>
+                  <div className="flex flex-wrap gap-2">
+                    {PAYMENT_METHODS.map(m => (
+                      <button
+                        key={m}
+                        onClick={() => setSelectedPaymentMethod(m)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${
+                          selectedPaymentMethod === m
+                            ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => handleSpecialPayment(payingStudentId)}
+                    className="flex-1 bg-emerald-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-emerald-700"
+                  >
+                    결제 완료
+                  </button>
+                  <button
+                    onClick={() => setPayingStudentId(null)}
+                    className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-200"
+                  >
+                    취소
+                  </button>
+                </div>
+              </>
+            );
+          })()}
         </div>
       </Modal>
 

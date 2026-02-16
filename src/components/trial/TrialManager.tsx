@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { format } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useAppStore } from '../../store/StoreContext';
 import type { PaymentMethod, ClassDuration } from '../../types';
@@ -14,6 +14,7 @@ export default function TrialManager() {
   const { trialStudents, trialLessons, updateTrialLesson, deleteTrialStudent } = useAppStore();
   const [payingLessonId, setPayingLessonId] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('계좌이체');
+  const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
 
   const trialData = useMemo(() => {
     return trialStudents.map(student => {
@@ -29,6 +30,18 @@ export default function TrialManager() {
     const revenue = trialLessons.filter(l => l.paid).reduce((sum, l) => sum + l.amount, 0);
     return { total, paid, unpaid, revenue };
   }, [trialLessons]);
+
+  const monthlyTrialRevenue = useMemo(() => {
+    const [year, month] = selectedMonth.split('-').map(Number);
+    const monthStart = startOfMonth(new Date(year, month - 1));
+    const monthEnd = endOfMonth(monthStart);
+    const paidThisMonth = trialLessons.filter(l => {
+      if (!l.paid || !l.paidAt) return false;
+      const date = parseISO(l.paidAt);
+      return isWithinInterval(date, { start: monthStart, end: monthEnd });
+    });
+    return paidThisMonth.reduce((sum, l) => sum + l.amount, 0);
+  }, [trialLessons, selectedMonth]);
 
   const handlePayment = (lessonId: string) => {
     updateTrialLesson(lessonId, {
@@ -49,7 +62,7 @@ export default function TrialManager() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <h4 className="text-sm font-medium text-gray-500 mb-1">총 체험 학생</h4>
           <div className="text-xl font-bold text-gray-900">{trialStudents.length}명</div>
@@ -63,8 +76,20 @@ export default function TrialManager() {
           <div className="text-xl font-bold text-red-600">{stats.unpaid}건</div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <h4 className="text-sm font-medium text-gray-500 mb-1">체험 수업 매출</h4>
+          <h4 className="text-sm font-medium text-gray-500 mb-1">총 매출 (누적)</h4>
           <div className="text-xl font-bold text-emerald-600">{formatCurrency(stats.revenue)}</div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="flex items-center justify-between mb-1">
+            <h4 className="text-sm font-medium text-gray-500">월별 매출</h4>
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={e => setSelectedMonth(e.target.value)}
+              className="text-xs border border-gray-200 rounded px-1 py-0.5"
+            />
+          </div>
+          <div className="text-xl font-bold text-indigo-600">{formatCurrency(monthlyTrialRevenue)}</div>
         </div>
       </div>
 

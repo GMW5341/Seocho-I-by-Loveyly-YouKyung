@@ -10,6 +10,7 @@ import PaymentManager from './components/payments/PaymentManager';
 import TrialManager from './components/trial/TrialManager';
 import MessageTemplates from './components/messages/MessageTemplates';
 import SpecialClassManager from './components/special/SpecialClassManager';
+import RevenueOverview from './components/revenue/RevenueOverview';
 import SettingsPage from './components/settings/SettingsPage';
 
 const TAB_TITLES: Record<string, string> = {
@@ -22,6 +23,7 @@ const TAB_TITLES: Record<string, string> = {
   trial: '체험 수업',
   messages: '메시지 양식',
   special: '특강 수업',
+  revenue: '매출 현황',
   settings: '설정',
 };
 
@@ -39,6 +41,7 @@ function AppContent() {
       case 'trial': return <TrialManager />;
       case 'messages': return <MessageTemplates />;
       case 'special': return <SpecialClassManager />;
+      case 'revenue': return <RevenueOverview />;
       case 'settings': return <SettingsPage />;
       default: return <Dashboard />;
     }
