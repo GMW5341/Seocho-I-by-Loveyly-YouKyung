@@ -8,6 +8,7 @@ const tabs: { id: TabType; label: string; icon: string }[] = [
   { id: 'attendance', label: '출결 관리', icon: '✅' },
   { id: 'payments', label: '결제 관리', icon: '💳' },
   { id: 'trial', label: '체험 수업', icon: '🌟' },
+  { id: 'messages', label: '메시지 양식', icon: '💬' },
   { id: 'settings', label: '설정', icon: '⚙️' },
 ];
 

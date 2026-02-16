@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type {
   Student, ScheduleSlot, AttendanceRecord, Payment, Holiday,
-  AcademySettings, TabType, TrialStudent, TrialLesson, CurriculumFile
+  AcademySettings, TabType, TrialStudent, TrialLesson, CurriculumFile, MessageTemplate
 } from '../types';
 import { DEFAULT_SETTINGS } from '../utils/helpers';
 
@@ -16,6 +16,7 @@ const STORAGE_KEYS = {
   trialStudents: 'seocho_trial_students',
   trialLessons: 'seocho_trial_lessons',
   curriculum: 'seocho_curriculum',
+  messageTemplates: 'seocho_message_templates',
 };
 
 function loadFromStorage<T>(key: string, fallback: T): T {
@@ -68,6 +69,7 @@ export function useStore() {
   const [trialStudents, setTrialStudents] = useState<TrialStudent[]>(() => loadFromStorage(STORAGE_KEYS.trialStudents, []));
   const [trialLessons, setTrialLessons] = useState<TrialLesson[]>(() => loadFromStorage(STORAGE_KEYS.trialLessons, []));
   const [curriculum, setCurriculum] = useState<CurriculumFile[]>(() => loadFromStorage(STORAGE_KEYS.curriculum, []));
+  const [messageTemplates, setMessageTemplates] = useState<MessageTemplate[]>(() => loadFromStorage(STORAGE_KEYS.messageTemplates, []));
 
   // Persist to localStorage on changes
   useEffect(() => { saveToStorage(STORAGE_KEYS.students, students); }, [students]);
@@ -79,6 +81,7 @@ export function useStore() {
   useEffect(() => { saveToStorage(STORAGE_KEYS.trialStudents, trialStudents); }, [trialStudents]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.trialLessons, trialLessons); }, [trialLessons]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.curriculum, curriculum); }, [curriculum]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.messageTemplates, messageTemplates); }, [messageTemplates]);
 
   // Student CRUD
   const addStudent = useCallback((student: Omit<Student, 'id' | 'createdAt' | 'active'>) => {
@@ -160,10 +163,11 @@ export function useStore() {
               pay.studentId === existing.studentId && !pay.completed
             );
             if (activePayment) {
+              const newRemaining = Math.min(activePayment.remainingSessions + 1, activePayment.totalSessions);
               return p.map(pay => pay.id === activePayment.id ? {
                 ...pay,
                 usedSessions: Math.max(0, pay.usedSessions - 1),
-                remainingSessions: pay.remainingSessions + 1,
+                remainingSessions: newRemaining,
                 completed: false,
               } : pay);
             }
@@ -203,10 +207,11 @@ export function useStore() {
             pay.studentId === existing.studentId && pay.completed && pay.remainingSessions === 0
           );
           if (activePayment) {
+            const newRemaining = Math.min(activePayment.remainingSessions + 1, activePayment.totalSessions);
             return p.map(pay => pay.id === activePayment.id ? {
               ...pay,
               usedSessions: Math.max(0, pay.usedSessions - 1),
-              remainingSessions: pay.remainingSessions + 1,
+              remainingSessions: newRemaining,
               completed: false,
             } : pay);
           }
@@ -317,6 +322,21 @@ export function useStore() {
     setCurriculum(prev => prev.filter(f => f.id !== id));
   }, []);
 
+  // Message Template CRUD
+  const addMessageTemplate = useCallback((data: Omit<MessageTemplate, 'id' | 'createdAt'>) => {
+    const newTemplate: MessageTemplate = { ...data, id: uuidv4(), createdAt: new Date().toISOString() };
+    setMessageTemplates(prev => [...prev, newTemplate]);
+    return newTemplate;
+  }, []);
+
+  const updateMessageTemplate = useCallback((id: string, updates: Partial<MessageTemplate>) => {
+    setMessageTemplates(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+  }, []);
+
+  const deleteMessageTemplate = useCallback((id: string) => {
+    setMessageTemplates(prev => prev.filter(t => t.id !== id));
+  }, []);
+
   // Helper: get student's active payment
   const getActivePayment = useCallback((studentId: string): Payment | undefined => {
     return payments.find(p => p.studentId === studentId && !p.completed && p.remainingSessions > 0);
@@ -340,6 +360,7 @@ export function useStore() {
     trialStudents, addTrialStudent, updateTrialStudent, deleteTrialStudent,
     trialLessons, addTrialLesson, updateTrialLesson, deleteTrialLesson,
     curriculum, addCurriculumFile, updateCurriculumFile, reorderCurriculum, deleteCurriculumFile,
+    messageTemplates, addMessageTemplate, updateMessageTemplate, deleteMessageTemplate,
     getActivePayment, getAttendanceByDateRange,
   };
 }

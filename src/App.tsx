@@ -8,6 +8,7 @@ import StudentList from './components/students/StudentList';
 import AttendanceManager from './components/attendance/AttendanceManager';
 import PaymentManager from './components/payments/PaymentManager';
 import TrialManager from './components/trial/TrialManager';
+import MessageTemplates from './components/messages/MessageTemplates';
 import SettingsPage from './components/settings/SettingsPage';
 
 const TAB_TITLES: Record<string, string> = {
@@ -18,6 +19,7 @@ const TAB_TITLES: Record<string, string> = {
   attendance: '출결 관리',
   payments: '결제 관리',
   trial: '체험 수업',
+  messages: '메시지 양식',
   settings: '설정',
 };
 
@@ -33,6 +35,7 @@ function AppContent() {
       case 'attendance': return <AttendanceManager />;
       case 'payments': return <PaymentManager />;
       case 'trial': return <TrialManager />;
+      case 'messages': return <MessageTemplates />;
       case 'settings': return <SettingsPage />;
       default: return <Dashboard />;
     }

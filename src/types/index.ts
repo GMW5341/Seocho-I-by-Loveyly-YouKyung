@@ -142,4 +142,12 @@ export interface DailyScheduleView {
   maxCapacity: number;
 }
 
-export type TabType = 'curriculum' | 'dashboard' | 'schedule' | 'students' | 'attendance' | 'payments' | 'trial' | 'settings';
+export interface MessageTemplate {
+  id: string;
+  title: string;
+  content: string;
+  category: string;
+  createdAt: string;
+}
+
+export type TabType = 'curriculum' | 'dashboard' | 'schedule' | 'students' | 'attendance' | 'payments' | 'trial' | 'messages' | 'settings';
