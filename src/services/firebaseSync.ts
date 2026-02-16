@@ -121,7 +121,7 @@ export function startRealtimeSync(onDataReceived?: () => void): boolean {
   const docRef = doc(db, 'academies', room);
   unsubscribe = onSnapshot(docRef, (snapshot) => {
     if (!snapshot.exists()) {
-      // No cloud data yet - push local data
+      // No cloud doc at all - push local data
       pushToCloud();
       return;
     }
@@ -130,6 +130,14 @@ export function startRealtimeSync(onDataReceived?: () => void): boolean {
 
     // Skip our own writes by comparing timestamp
     if (cloudData._updatedAt && cloudData._updatedAt === lastPushTimestamp) return;
+
+    // Check if cloud has actual app data (not just _connectionTest)
+    const hasCloudData = ALL_STORAGE_KEYS.some(key => cloudData[key] !== undefined);
+    if (!hasCloudData) {
+      // Cloud doc exists but has no real data - push local data
+      pushToCloud();
+      return;
+    }
 
     // Apply cloud data to localStorage
     let changed = false;
@@ -198,8 +206,10 @@ export function setupSync(
   db = null;
   if (!initFirebase(config)) return false;
 
-  // Push current data first, then start listening
-  pushToCloud();
+  // Don't push here - the listener handles it:
+  // - If cloud has no data → listener pushes local data
+  // - If cloud has data → listener pulls to local
+  // This prevents a new (empty) device from overwriting existing cloud data
   return startRealtimeSync(onDataReceived);
 }
 
