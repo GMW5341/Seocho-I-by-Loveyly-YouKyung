@@ -527,11 +527,11 @@ export default function SettingsPage() {
             <div className="flex flex-wrap gap-2">
               <button
                 disabled={!firebaseConfig.projectId || !syncRoom || syncStatus === 'connecting'}
-                onClick={() => {
+                onClick={async () => {
                   setSyncStatus('connecting');
                   setSyncMessage('');
                   try {
-                    const ok = setupSync(firebaseConfig, syncRoom, () => {
+                    const ok = await setupSync(firebaseConfig, syncRoom, () => {
                       window.location.reload();
                     });
                     if (ok) {

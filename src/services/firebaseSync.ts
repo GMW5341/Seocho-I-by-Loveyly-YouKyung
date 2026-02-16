@@ -246,11 +246,11 @@ export async function testConnection(config: FirebaseConfig, room: string): Prom
 }
 
 /** Full setup: save config, enable sync, start listening */
-export function setupSync(
+export async function setupSync(
   config: FirebaseConfig,
   room: string,
   onDataReceived?: () => void
-): boolean {
+): Promise<boolean> {
   saveSyncConfig(config);
   saveSyncRoom(room);
   setSyncEnabled(true);
@@ -260,10 +260,19 @@ export function setupSync(
   db = null;
   if (!initFirebase(config)) return false;
 
-  // Don't push here - the listener handles it:
-  // - If cloud has no data → listener pushes local data
-  // - If cloud has data → listener pulls to local
-  // This prevents a new (empty) device from overwriting existing cloud data
+  // If local has meaningful data, push it to cloud FIRST.
+  // This prevents the realtime listener from overwriting local data with old cloud data.
+  // For a new/empty device, skip the push so the listener can pull cloud data instead.
+  const localData = gatherLocalData();
+  const hasLocalData = ALL_STORAGE_KEYS.some(key => {
+    const val = localData[key];
+    return val !== undefined && val !== '[]' && val !== '';
+  });
+
+  if (hasLocalData) {
+    await pushToCloud();
+  }
+
   return startRealtimeSync(onDataReceived);
 }
 
