@@ -98,11 +98,11 @@ export default function SettingsPage() {
     URL.revokeObjectURL(url);
   };
 
-  const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportData = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const data = JSON.parse(event.target?.result as string);
         // Support both old format (short keys) and new format (full keys)
@@ -115,18 +115,26 @@ export default function SettingsPage() {
         // Import new format (full storage keys)
         ALL_STORAGE_KEYS.forEach(key => {
           if (data[key] != null) {
-            localStorage.setItem(key, data[key]);
+            // Handle both string values and object/array values
+            const val = typeof data[key] === 'string' ? data[key] : JSON.stringify(data[key]);
+            localStorage.setItem(key, val);
             imported = true;
           }
         });
         // Import old format (short keys) as fallback
         Object.entries(keyMap).forEach(([shortKey, fullKey]) => {
           if (data[shortKey] != null && !data[fullKey]) {
-            localStorage.setItem(fullKey, data[shortKey]);
+            const val = typeof data[shortKey] === 'string' ? data[shortKey] : JSON.stringify(data[shortKey]);
+            localStorage.setItem(fullKey, val);
             imported = true;
           }
         });
         if (imported) {
+          // If sync is enabled, push imported data to cloud first
+          // This prevents cloud from overwriting the import on reload
+          if (checkSyncEnabled()) {
+            await pushToCloud();
+          }
           window.location.reload();
         } else {
           alert('백업 파일에 복원할 데이터가 없습니다.');
