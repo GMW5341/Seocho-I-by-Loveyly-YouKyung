@@ -194,12 +194,12 @@ export default function StudentList() {
       </div>
 
       {/* Add Modal */}
-      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title="원생 등록">
+      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title="원생 등록" preventBackdropClose>
         <StudentForm onSubmit={handleAdd} onCancel={() => setShowForm(false)} />
       </Modal>
 
       {/* Edit Modal */}
-      <Modal isOpen={!!editingStudent} onClose={() => setEditingStudent(undefined)} title="원생 정보 수정">
+      <Modal isOpen={!!editingStudent} onClose={() => setEditingStudent(undefined)} title="원생 정보 수정" preventBackdropClose>
         {editingStudent && (
           <StudentForm student={editingStudent} onSubmit={handleEdit} onCancel={() => setEditingStudent(undefined)} />
         )}
