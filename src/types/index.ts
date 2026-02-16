@@ -115,6 +115,7 @@ export interface CurriculumFile {
   name: string;
   type: 'image' | 'pdf';
   classLevel: ClassLevel;
+  order?: number; // higher = more recent/current
   dataUrl: string; // base64 data URL
   createdAt: string;
 }

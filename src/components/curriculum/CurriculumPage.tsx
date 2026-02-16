@@ -32,11 +32,24 @@ function compressImage(dataUrl: string, maxWidth = 1600, quality = 0.8): Promise
   });
 }
 
+function sortFiles(files: CurriculumFile[]): CurriculumFile[] {
+  return [...files].sort((a, b) => {
+    const orderA = a.order ?? new Date(a.createdAt).getTime();
+    const orderB = b.order ?? new Date(b.createdAt).getTime();
+    return orderB - orderA;
+  });
+}
+
 export default function CurriculumPage() {
-  const { curriculum, addCurriculumFile, deleteCurriculumFile } = useAppStore();
+  const { curriculum, addCurriculumFile, reorderCurriculum, deleteCurriculumFile } = useAppStore();
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [zoomedFile, setZoomedFile] = useState<CurriculumFile | null>(null);
-  const [draggingLevel, setDraggingLevel] = useState<ClassLevel | null>(null);
+  const [fileDraggingLevel, setFileDraggingLevel] = useState<ClassLevel | null>(null);
+
+  // Internal drag state
+  const [dragSourceId, setDragSourceId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [dropOnCurrent, setDropOnCurrent] = useState<ClassLevel | null>(null);
 
   const processFiles = useCallback(async (files: FileList | File[], classLevel: ClassLevel) => {
     for (const file of Array.from(files)) {
@@ -70,31 +83,118 @@ export default function CurriculumPage() {
     e.target.value = '';
   };
 
-  const handleDragOver = (e: React.DragEvent, classLevel: ClassLevel) => {
+  // External file drag (from desktop)
+  const isExternalDrag = (e: React.DragEvent) => e.dataTransfer.types.includes('Files');
+
+  const handleExternalDragOver = (e: React.DragEvent, classLevel: ClassLevel) => {
+    if (!isExternalDrag(e)) return;
     e.preventDefault();
     e.stopPropagation();
-    setDraggingLevel(classLevel);
+    setFileDraggingLevel(classLevel);
   };
 
-  const handleDragLeave = (e: React.DragEvent) => {
+  const handleExternalDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setDraggingLevel(null);
+    setFileDraggingLevel(null);
   };
 
-  const handleDrop = (e: React.DragEvent, classLevel: ClassLevel) => {
+  const handleExternalDrop = (e: React.DragEvent, classLevel: ClassLevel) => {
+    if (!isExternalDrag(e)) return;
     e.preventDefault();
     e.stopPropagation();
-    setDraggingLevel(null);
+    setFileDraggingLevel(null);
     const files = e.dataTransfer.files;
     if (files.length > 0) {
       processFiles(files, classLevel);
     }
   };
 
+  // Internal item drag (reordering)
+  const handleItemDragStart = (e: React.DragEvent, fileId: string) => {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/curriculum-id', fileId);
+    setDragSourceId(fileId);
+  };
+
+  const handleItemDragEnd = () => {
+    setDragSourceId(null);
+    setDropTargetId(null);
+    setDropOnCurrent(null);
+  };
+
+  const handleCurrentDropZone = (e: React.DragEvent, level: ClassLevel) => {
+    if (isExternalDrag(e)) {
+      handleExternalDragOver(e, level);
+      return;
+    }
+    e.preventDefault();
+    setDropOnCurrent(level);
+    setDropTargetId(null);
+  };
+
+  const handleCurrentDropZoneLeave = (e: React.DragEvent) => {
+    if (isExternalDrag(e)) {
+      handleExternalDragLeave(e);
+      return;
+    }
+    e.preventDefault();
+    setDropOnCurrent(null);
+  };
+
+  const handlePastItemDragOver = (e: React.DragEvent, fileId: string) => {
+    if (isExternalDrag(e)) return;
+    e.preventDefault();
+    setDropTargetId(fileId);
+    setDropOnCurrent(null);
+  };
+
+  const handlePastItemDragLeave = (e: React.DragEvent) => {
+    if (isExternalDrag(e)) return;
+    e.preventDefault();
+    setDropTargetId(null);
+  };
+
+  const handleDropOnItem = (e: React.DragEvent, level: ClassLevel, targetFileId: string | null) => {
+    // External file drop
+    if (isExternalDrag(e)) {
+      handleExternalDrop(e, level);
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+    const sourceId = e.dataTransfer.getData('text/curriculum-id') || dragSourceId;
+    if (!sourceId) return;
+
+    const levelFiles = getFilesForLevel(level);
+    const sorted = sortFiles(levelFiles);
+    const orderedIds = sorted.map(f => f.id);
+
+    if (!orderedIds.includes(sourceId)) return;
+
+    // Remove source from current position
+    const withoutSource = orderedIds.filter(id => id !== sourceId);
+
+    if (targetFileId === null) {
+      // Dropped on current area -> make it current (first position)
+      const newOrder = [sourceId, ...withoutSource];
+      reorderCurriculum(newOrder);
+    } else {
+      // Dropped on a past item -> insert before it
+      const targetIdx = withoutSource.indexOf(targetFileId);
+      if (targetIdx === -1) return;
+      withoutSource.splice(targetIdx, 0, sourceId);
+      reorderCurriculum(withoutSource);
+    }
+
+    setDragSourceId(null);
+    setDropTargetId(null);
+    setDropOnCurrent(null);
+  };
+
   const getFilesForLevel = (level: ClassLevel): CurriculumFile[] => {
     const levelFiles = curriculum.filter(f => f.classLevel === level);
-    // Include legacy files without classLevel in first section
     if (level === '유아반') {
       const legacy = curriculum.filter(f => !f.classLevel);
       return [...levelFiles, ...legacy];
@@ -106,17 +206,17 @@ export default function CurriculumPage() {
     <div className="p-6">
       <div className="mb-6">
         <h3 className="text-lg font-bold text-gray-800">커리큘럼</h3>
-        <p className="text-sm text-gray-500">반별 커리큘럼을 업로드하고 관리하세요. 드래그하여 업로드하거나 버튼을 클릭하세요.</p>
+        <p className="text-sm text-gray-500">반별 커리큘럼을 업로드하고 관리하세요. 파일을 드래그하여 업로드하거나, 커리큘럼 간 드래그로 순서를 변경할 수 있습니다.</p>
       </div>
 
       <div className="space-y-8">
         {CLASS_LEVELS.map(({ level, label, color, bgColor, borderColor }) => {
           const allFiles = getFilesForLevel(level);
-          // Sort by date descending - latest first
-          const sorted = [...allFiles].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          const sorted = sortFiles(allFiles);
           const currentFile = sorted[0] || null;
           const pastFiles = sorted.slice(1);
-          const isDragging = draggingLevel === level;
+          const isFileDragging = fileDraggingLevel === level;
+          const isCurrentDropTarget = dropOnCurrent === level;
 
           return (
             <div key={level} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -144,14 +244,14 @@ export default function CurriculumPage() {
 
               {/* Content / Drop Zone */}
               <div
-                onDragOver={e => handleDragOver(e, level)}
-                onDragLeave={handleDragLeave}
-                onDrop={e => handleDrop(e, level)}
+                onDragOver={e => handleExternalDragOver(e, level)}
+                onDragLeave={handleExternalDragLeave}
+                onDrop={e => handleExternalDrop(e, level)}
                 className={`p-4 transition-colors min-h-[120px] ${
-                  isDragging ? `${bgColor} border-2 border-dashed ${borderColor}` : ''
+                  isFileDragging ? `${bgColor} border-2 border-dashed ${borderColor}` : ''
                 }`}
               >
-                {isDragging ? (
+                {isFileDragging && !dragSourceId ? (
                   <div className="flex items-center justify-center h-24">
                     <p className={`text-sm font-medium ${color}`}>여기에 파일을 놓으세요</p>
                   </div>
@@ -165,10 +265,26 @@ export default function CurriculumPage() {
                   </div>
                 ) : (
                   <div className="flex gap-4">
-                    {/* Current (latest) curriculum - large display */}
-                    <div className="flex-1 min-w-0">
+                    {/* Current (latest) curriculum - large display, also a drop target */}
+                    <div
+                      className={`flex-1 min-w-0 rounded-lg transition-all ${
+                        isCurrentDropTarget && dragSourceId !== currentFile?.id
+                          ? 'ring-2 ring-indigo-400 ring-offset-2'
+                          : ''
+                      }`}
+                      onDragOver={e => handleCurrentDropZone(e, level)}
+                      onDragLeave={handleCurrentDropZoneLeave}
+                      onDrop={e => handleDropOnItem(e, level, null)}
+                    >
                       {currentFile && (
-                        <div className="group relative border border-gray-200 rounded-lg overflow-hidden">
+                        <div
+                          className={`group relative border border-gray-200 rounded-lg overflow-hidden transition-opacity ${
+                            dragSourceId === currentFile.id ? 'opacity-40' : ''
+                          }`}
+                          draggable
+                          onDragStart={e => handleItemDragStart(e, currentFile.id)}
+                          onDragEnd={handleItemDragEnd}
+                        >
                           <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-100">
                             <div className="flex items-center gap-1.5 min-w-0">
                               <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${borderColor} border ${bgColor} ${color}`}>
@@ -180,6 +296,7 @@ export default function CurriculumPage() {
                               }`}>
                                 {currentFile.type === 'image' ? 'IMG' : 'PDF'}
                               </span>
+                              <span className="text-[10px] text-gray-400 cursor-grab active:cursor-grabbing ml-1">&#x2630;</span>
                             </div>
                             <button
                               onClick={() => {
@@ -230,7 +347,19 @@ export default function CurriculumPage() {
                           {pastFiles.map(file => (
                             <div
                               key={file.id}
-                              className="group/past relative border border-gray-200 rounded-lg overflow-hidden cursor-pointer hover:border-gray-400 transition-colors"
+                              className={`group/past relative border rounded-lg overflow-hidden cursor-pointer transition-all ${
+                                dragSourceId === file.id
+                                  ? 'opacity-40 border-gray-200'
+                                  : dropTargetId === file.id
+                                  ? 'border-indigo-400 ring-2 ring-indigo-300 ring-offset-1'
+                                  : 'border-gray-200 hover:border-gray-400'
+                              }`}
+                              draggable
+                              onDragStart={e => handleItemDragStart(e, file.id)}
+                              onDragEnd={handleItemDragEnd}
+                              onDragOver={e => handlePastItemDragOver(e, file.id)}
+                              onDragLeave={handlePastItemDragLeave}
+                              onDrop={e => handleDropOnItem(e, level, file.id)}
                               onClick={() => setZoomedFile(file)}
                             >
                               {file.type === 'image' ? (
@@ -247,13 +376,15 @@ export default function CurriculumPage() {
                                   <span className="text-[10px] text-red-500 font-medium">PDF</span>
                                 </div>
                               )}
-                              <div className="px-1.5 py-1 bg-white border-t border-gray-100">
-                                <div className="text-[9px] text-gray-600 truncate">{file.name}</div>
-                                <div className="text-[9px] text-gray-400">
-                                  {format(new Date(file.createdAt), 'yy.MM.dd', { locale: ko })}
+                              <div className="px-1.5 py-1 bg-white border-t border-gray-100 flex items-center gap-1">
+                                <span className="text-[10px] text-gray-400 cursor-grab active:cursor-grabbing">&#x2630;</span>
+                                <div className="min-w-0">
+                                  <div className="text-[9px] text-gray-600 truncate">{file.name}</div>
+                                  <div className="text-[9px] text-gray-400">
+                                    {format(new Date(file.createdAt), 'yy.MM.dd', { locale: ko })}
+                                  </div>
                                 </div>
                               </div>
-                              {/* Delete button on hover */}
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();

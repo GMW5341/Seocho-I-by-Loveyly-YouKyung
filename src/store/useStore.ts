@@ -291,9 +291,26 @@ export function useStore() {
 
   // Curriculum CRUD
   const addCurriculumFile = useCallback((data: Omit<CurriculumFile, 'id' | 'createdAt'>) => {
-    const newFile: CurriculumFile = { ...data, id: uuidv4(), createdAt: new Date().toISOString() };
-    setCurriculum(prev => [...prev, newFile]);
-    return newFile;
+    setCurriculum(prev => {
+      const maxOrder = prev.reduce((max, f) => Math.max(max, f.order ?? 0), 0);
+      const newFile: CurriculumFile = { ...data, id: uuidv4(), order: maxOrder + 1, createdAt: new Date().toISOString() };
+      return [...prev, newFile];
+    });
+  }, []);
+
+  const updateCurriculumFile = useCallback((id: string, updates: Partial<CurriculumFile>) => {
+    setCurriculum(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f));
+  }, []);
+
+  const reorderCurriculum = useCallback((orderedIds: string[]) => {
+    setCurriculum(prev => {
+      const updated = [...prev];
+      orderedIds.forEach((id, index) => {
+        const file = updated.find(f => f.id === id);
+        if (file) file.order = orderedIds.length - index;
+      });
+      return updated;
+    });
   }, []);
 
   const deleteCurriculumFile = useCallback((id: string) => {
@@ -322,7 +339,7 @@ export function useStore() {
     settings, updateSettings,
     trialStudents, addTrialStudent, updateTrialStudent, deleteTrialStudent,
     trialLessons, addTrialLesson, updateTrialLesson, deleteTrialLesson,
-    curriculum, addCurriculumFile, deleteCurriculumFile,
+    curriculum, addCurriculumFile, updateCurriculumFile, reorderCurriculum, deleteCurriculumFile,
     getActivePayment, getAttendanceByDateRange,
   };
 }
