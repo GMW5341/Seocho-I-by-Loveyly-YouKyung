@@ -6,7 +6,7 @@ import type {
   SpecialClass, SpecialClassStudent
 } from '../types';
 import { DEFAULT_SETTINGS } from '../utils/helpers';
-import { pushToCloud, isSyncEnabled, initSyncOnStartup } from '../services/firebaseSync';
+import { pushToCloud, isSyncEnabled, initSyncOnStartup, checkUrlForSyncConfig, setupSync } from '../services/firebaseSync';
 
 const STORAGE_KEYS = {
   students: 'seocho_students',
@@ -87,8 +87,18 @@ export function useStore() {
     cloudSyncTimer.current = setTimeout(() => { pushToCloud(); }, 1000);
   }, []);
 
-  // Initialize cloud sync on startup
+  // Initialize cloud sync on startup (or auto-setup from shared URL)
   useEffect(() => {
+    const urlSync = checkUrlForSyncConfig();
+    if (urlSync && !isSyncEnabled()) {
+      // Auto-configure sync from shared URL
+      setupSync(urlSync.config, urlSync.room, () => {
+        window.location.reload();
+      });
+      // Clean the URL hash
+      history.replaceState(null, '', window.location.pathname);
+      return;
+    }
     initSyncOnStartup(() => {
       // Cloud data received - reload to pick up changes
       window.location.reload();

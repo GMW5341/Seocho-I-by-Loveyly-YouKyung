@@ -5,7 +5,7 @@ import type { SeasonType, DayOfWeek, ClassDuration } from '../../types';
 import { DAYS_OF_WEEK, formatCurrency } from '../../utils/helpers';
 import {
   getSyncConfig, getSyncRoom, isSyncEnabled as checkSyncEnabled,
-  setupSync, stopSync, setSyncEnabled, pushToCloud,
+  setupSync, stopSync, setSyncEnabled, pushToCloud, generateSyncUrl,
   type FirebaseConfig,
 } from '../../services/firebaseSync';
 
@@ -395,6 +395,26 @@ export default function SettingsPage() {
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
               <span className="text-sm text-green-700 font-medium">동기화 활성화됨</span>
               <span className="text-xs text-green-600 ml-auto">방 이름: {getSyncRoom()}</span>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-2">
+              <p className="text-xs font-bold text-amber-800 mb-1.5">모바일에서 바로 연결하기</p>
+              <p className="text-xs text-amber-700 mb-2">아래 링크를 카카오톡 나에게 보내기로 보낸 뒤, 모바일에서 열면 자동으로 동기화됩니다.</p>
+              <button
+                onClick={() => {
+                  const url = generateSyncUrl();
+                  if (url) {
+                    navigator.clipboard.writeText(url).then(() => {
+                      setSyncMessage('링크가 복사되었습니다! 카카오톡으로 보내세요.');
+                      setTimeout(() => setSyncMessage(''), 5000);
+                    }).catch(() => {
+                      prompt('아래 링크를 복사하세요:', url);
+                    });
+                  }
+                }}
+                className="bg-amber-600 text-white px-4 py-2 rounded-lg text-xs font-medium hover:bg-amber-700 w-full"
+              >
+                모바일 연결 링크 복사
+              </button>
             </div>
             <div className="flex flex-wrap gap-2">
               <button

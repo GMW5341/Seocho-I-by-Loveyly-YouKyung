@@ -1,4 +1,4 @@
-import { initializeApp, type FirebaseApp } from 'firebase/app';
+import { initializeApp, getApps, deleteApp, type FirebaseApp } from 'firebase/app';
 import {
   getFirestore, doc, setDoc, onSnapshot, type Firestore, type Unsubscribe,
 } from 'firebase/firestore';
@@ -27,7 +27,7 @@ export interface FirebaseConfig {
 let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
 let unsubscribe: Unsubscribe | null = null;
-let isSyncingFromCloud = false;
+let lastPushTimestamp = '';
 
 export function getSyncConfig(): FirebaseConfig | null {
   try {
@@ -60,8 +60,15 @@ export function setSyncEnabled(enabled: boolean): void {
 
 function initFirebase(config: FirebaseConfig): boolean {
   try {
-    if (app) return true;
-    app = initializeApp(config);
+    if (app && db) return true;
+    // Reuse existing Firebase app if already initialized
+    const existingApps = getApps();
+    const defaultApp = existingApps.find(a => a.name === '[DEFAULT]');
+    if (defaultApp) {
+      app = defaultApp;
+    } else {
+      app = initializeApp(config);
+    }
     db = getFirestore(app);
     return true;
   } catch (e) {
@@ -89,13 +96,12 @@ export async function pushToCloud(): Promise<boolean> {
   const room = getSyncRoom();
   if (!room) return false;
   try {
-    isSyncingFromCloud = true;
-    await setDoc(doc(db, 'academies', room), gatherLocalData());
-    isSyncingFromCloud = false;
+    const data = gatherLocalData();
+    lastPushTimestamp = data._updatedAt;
+    await setDoc(doc(db, 'academies', room), data);
     return true;
   } catch (e) {
     console.error('Push to cloud failed:', e);
-    isSyncingFromCloud = false;
     return false;
   }
 }
@@ -122,8 +128,8 @@ export function startRealtimeSync(onDataReceived?: () => void): boolean {
     const cloudData = snapshot.data();
     if (!cloudData) return;
 
-    // Avoid re-triggering when we just pushed
-    if (isSyncingFromCloud) return;
+    // Skip our own writes by comparing timestamp
+    if (cloudData._updatedAt && cloudData._updatedAt === lastPushTimestamp) return;
 
     // Apply cloud data to localStorage
     let changed = false;
@@ -156,15 +162,22 @@ export function stopSync(): void {
 
 /** Test Firebase connection */
 export async function testConnection(config: FirebaseConfig, room: string): Promise<{ success: boolean; message: string }> {
+  let testApp: FirebaseApp | null = null;
   try {
-    const testApp = initializeApp(config, 'test-connection');
+    // Clean up any existing test app first
+    const existing = getApps().find(a => a.name === 'test-connection');
+    if (existing) await deleteApp(existing);
+
+    testApp = initializeApp(config, 'test-connection');
     const testDb = getFirestore(testApp);
     const docRef = doc(testDb, 'academies', room);
     await setDoc(docRef, { _connectionTest: new Date().toISOString() }, { merge: true });
-    // Clean up test app
-    app = null;
+    await deleteApp(testApp);
     return { success: true, message: '연결 성공!' };
   } catch (e) {
+    if (testApp) {
+      try { await deleteApp(testApp); } catch { /* ignore cleanup error */ }
+    }
     const msg = e instanceof Error ? e.message : String(e);
     return { success: false, message: `연결 실패: ${msg}` };
   }
@@ -180,7 +193,7 @@ export function setupSync(
   saveSyncRoom(room);
   setSyncEnabled(true);
 
-  // Re-initialize Firebase with potentially new config
+  // Reset module-level references (initFirebase will reuse existing app)
   app = null;
   db = null;
   if (!initFirebase(config)) return false;
@@ -198,4 +211,30 @@ export function initSyncOnStartup(onDataReceived?: () => void): boolean {
   if (!config || !room) return false;
   if (!initFirebase(config)) return false;
   return startRealtimeSync(onDataReceived);
+}
+
+/** Generate a shareable URL that auto-configures sync on other devices */
+export function generateSyncUrl(): string {
+  const config = getSyncConfig();
+  const room = getSyncRoom();
+  if (!config || !room) return '';
+  const data = JSON.stringify({ c: config, r: room });
+  const encoded = encodeURIComponent(data);
+  return `${window.location.origin}${window.location.pathname}#sync=${encoded}`;
+}
+
+/** Check if current URL contains sync config (from shared link) */
+export function checkUrlForSyncConfig(): { config: FirebaseConfig; room: string } | null {
+  try {
+    const hash = window.location.hash;
+    if (!hash.startsWith('#sync=')) return null;
+    const encoded = hash.slice(6);
+    const data = JSON.parse(decodeURIComponent(encoded));
+    if (data.c && data.r && data.c.apiKey && data.c.projectId) {
+      return { config: data.c, room: data.r };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
