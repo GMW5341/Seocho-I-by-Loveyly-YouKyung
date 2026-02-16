@@ -28,12 +28,30 @@ const STATUS_COLORS: Record<AttendanceStatus, string> = {
   '예정': '',
 };
 
+interface DisplaySlot {
+  id: string;
+  studentId: string;
+  dayOfWeek: DayOfWeek;
+  startTime: string;
+  duration: number;
+  isRegular: boolean;
+  isTrial?: boolean;
+  trialStudentId?: string;
+  date?: string;
+  isSpecialClass?: boolean;
+  specialClassName?: string;
+  specialClassStudentCount?: number;
+  column: number;
+  numColumns: number;
+}
+
 export default function ScheduleGrid() {
   const {
     students, schedules, settings, trialStudents, attendance, payments,
     moveSchedule, removeSchedule, restoreSchedule, addSchedule,
     addTrialStudent, addTrialLesson,
     addAttendance, updateAttendance, deleteAttendance,
+    specialClasses, specialClassStudents,
   } = useAppStore();
   const [showMakeupForm, setShowMakeupForm] = useState(false);
   const [showTrialForm, setShowTrialForm] = useState(false);
@@ -165,19 +183,49 @@ export default function ScheduleGrid() {
     });
   }, [schedules, currentWeekStart, weekEnd, payments]);
 
+  // Generate virtual slots for active special classes
+  const specialClassSlots = useMemo(() => {
+    const weekStartStr = format(currentWeekStart, 'yyyy-MM-dd');
+    const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
+    const virtualSlots: Array<{
+      id: string; studentId: string; dayOfWeek: DayOfWeek; startTime: string;
+      duration: number; isRegular: boolean; isSpecialClass: boolean;
+      specialClassName: string; specialClassStudentCount: number;
+    }> = [];
+    specialClasses.filter(c => c.active && c.startDate <= weekEndStr && c.endDate >= weekStartStr).forEach(cls => {
+      const count = specialClassStudents.filter(s => s.specialClassId === cls.id).length;
+      cls.schedule.forEach((entry, i) => {
+        virtualSlots.push({
+          id: `special-${cls.id}-${i}`,
+          studentId: '',
+          dayOfWeek: entry.day,
+          startTime: entry.startTime,
+          duration: cls.duration,
+          isRegular: false,
+          isSpecialClass: true,
+          specialClassName: cls.name,
+          specialClassStudentCount: count,
+        });
+      });
+    });
+    return virtualSlots;
+  }, [specialClasses, specialClassStudents, currentWeekStart, weekEnd]);
+
   // Schedules grouped by day with layout info
   const daySchedules = useMemo(() => {
-    const result: Record<string, Array<ScheduleSlot & { column: number; numColumns: number }>> = {};
+    const result: Record<string, DisplaySlot[]> = {};
     DAYS_OF_WEEK.forEach(day => {
-      const daySlots = filteredSchedules.filter(s => s.dayOfWeek === day);
-      const layout = layoutSlotsForDay(daySlots);
-      result[day] = daySlots.map(slot => {
+      const regularSlots = filteredSchedules.filter(s => s.dayOfWeek === day);
+      const specSlots = specialClassSlots.filter(s => s.dayOfWeek === day);
+      const allSlots = [...regularSlots, ...specSlots];
+      const layout = layoutSlotsForDay(allSlots);
+      result[day] = allSlots.map(slot => {
         const pos = layout.get(slot.id) || { column: 0, numColumns: 1 };
-        return { ...slot, column: pos.column, numColumns: pos.numColumns };
+        return { ...slot, column: pos.column, numColumns: pos.numColumns } as DisplaySlot;
       });
     });
     return result;
-  }, [filteredSchedules]);
+  }, [filteredSchedules, specialClassSlots]);
 
   // Drop validation
   const isDropValid = useCallback((day: DayOfWeek, time: string, slot: ScheduleSlot): boolean => {
@@ -382,6 +430,7 @@ export default function ScheduleGrid() {
         <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-violet-200 border border-violet-300" /> 100분</div>
         <div className="flex items-center gap-1 ml-4"><div className="w-3 h-3 rounded border-2 border-dashed border-orange-400" /> 보강</div>
         <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-emerald-200 border-2 border-emerald-400" /> 체험</div>
+        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-rose-200 border-2 border-rose-400" /> 특강</div>
         <div className="flex items-center gap-1 ml-4"><div className="w-3 h-3 rounded ring-2 ring-green-500 bg-white" /> 출석</div>
         <div className="flex items-center gap-1"><div className="w-3 h-3 rounded ring-2 ring-red-500 bg-red-50" /> 결석</div>
       </div>
@@ -513,12 +562,17 @@ export default function ScheduleGrid() {
 
                   {/* Schedule blocks */}
                   {daySlots.map(slot => {
+                    const isSpecial = slot.isSpecialClass;
                     const isTrial = slot.isTrial;
-                    const student = isTrial ? null : getStudentById(slot.studentId);
+                    const student = !isSpecial && !isTrial ? getStudentById(slot.studentId) : null;
                     const trialStudent = isTrial && slot.trialStudentId ? getTrialStudentById(slot.trialStudentId) : null;
-                    const displayName = isTrial ? (trialStudent?.name || '체험') : (student?.name || '');
+                    const displayName = isSpecial
+                      ? (slot.specialClassName || '특강')
+                      : isTrial
+                      ? (trialStudent?.name || '체험')
+                      : (student?.name || '');
 
-                    if (!isTrial && !student) return null;
+                    if (!isSpecial && !isTrial && !student) return null;
 
                     const top = (timeToMinutes(slot.startTime) - timeRange.earliest) * PX_PER_MINUTE;
                     const height = slot.duration * PX_PER_MINUTE;
@@ -526,15 +580,45 @@ export default function ScheduleGrid() {
                     const leftPercent = slot.column * widthPercent;
                     const endTime = getEndTime(slot.startTime, slot.duration);
 
-                    const attendanceRecord = !isTrial && student ? getAttendanceRecord(student.id, dateStr, slot.startTime) : null;
+                    const attendanceRecord = !isSpecial && !isTrial && student ? getAttendanceRecord(student.id, dateStr, slot.startTime) : null;
                     const attendanceClass = attendanceRecord ? STATUS_COLORS[attendanceRecord.status] || '' : '';
                     const isAbsent = attendanceRecord?.status === '결석';
+
+                    // Special class block
+                    if (isSpecial) {
+                      return (
+                        <div
+                          key={slot.id}
+                          className={`
+                            absolute z-10 rounded border-2 select-none overflow-hidden
+                            bg-rose-100 border-rose-400
+                            opacity-95
+                            ${isDayView ? 'px-3 py-2' : 'px-1.5 py-1'}
+                          `}
+                          style={{
+                            top: top + 1,
+                            height: height - 2,
+                            left: `calc(${leftPercent}% + 2px)`,
+                            width: `calc(${widthPercent}% - 4px)`,
+                          }}
+                        >
+                          <div className={`font-semibold truncate text-rose-800 ${isDayView ? 'text-sm' : 'text-xs'}`}>
+                            {displayName}
+                          </div>
+                          <div className={`text-rose-600 tabular-nums ${isDayView ? 'text-xs' : 'text-[10px]'}`}>{slot.startTime}-{endTime}</div>
+                          <div className={`text-rose-600 ${isDayView ? 'text-xs' : 'text-[10px]'}`}>{slot.duration}분</div>
+                          <div className={`text-rose-700 font-medium ${isDayView ? 'text-xs' : 'text-[10px]'}`}>
+                            특강 ({slot.specialClassStudentCount || 0}명)
+                          </div>
+                        </div>
+                      );
+                    }
 
                     return (
                       <div
                         key={slot.id}
                         draggable
-                        onDragStart={(e) => handleDragStart(slot, e)}
+                        onDragStart={(e) => handleDragStart(slot as ScheduleSlot, e)}
                         onDragEnd={handleDragEnd}
                         className={`
                           absolute z-10 rounded cursor-grab active:cursor-grabbing
@@ -631,7 +715,7 @@ export default function ScheduleGrid() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDeleteSlot(slot, displayName);
+                            handleDeleteSlot(slot as ScheduleSlot, displayName);
                           }}
                           className={`absolute top-0 right-0 bg-red-500 text-white rounded-full leading-none items-center justify-center hidden group-hover/card:flex ${
                             isDayView ? 'w-5 h-5 text-xs' : 'w-4 h-4 text-[10px]'

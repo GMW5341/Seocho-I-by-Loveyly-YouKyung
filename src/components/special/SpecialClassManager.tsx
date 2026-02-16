@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '../../store/StoreContext';
-import type { SpecialClass, SpecialClassStudent, StudentGrade, ClassDuration, DayOfWeek } from '../../types';
+import type { SpecialClass, SpecialClassStudent, StudentGrade, DayOfWeek } from '../../types';
 import Modal from '../common/Modal';
 import Badge from '../common/Badge';
 
@@ -24,7 +24,7 @@ export default function SpecialClassManager() {
   const [className, setClassName] = useState('');
   const [classStartDate, setClassStartDate] = useState('');
   const [classEndDate, setClassEndDate] = useState('');
-  const [classDuration, setClassDuration] = useState<ClassDuration>(80);
+  const [classDuration, setClassDuration] = useState(80);
   const [classMaxStudents, setClassMaxStudents] = useState(10);
   const [classFee, setClassFee] = useState(0);
   const [classMemo, setClassMemo] = useState('');
@@ -377,16 +377,16 @@ export default function SpecialClassManager() {
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">수업 시간</label>
-              <select
+              <label className="block text-sm font-medium text-gray-700 mb-1">수업 시간 (분)</label>
+              <input
+                type="number"
                 value={classDuration}
-                onChange={e => setClassDuration(Number(e.target.value) as ClassDuration)}
+                onChange={e => setClassDuration(Number(e.target.value))}
+                min={10}
+                step={10}
+                placeholder="예: 90"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-              >
-                <option value={60}>60분</option>
-                <option value={80}>80분</option>
-                <option value={100}>100분</option>
-              </select>
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">최대 인원</label>

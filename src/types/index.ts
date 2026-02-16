@@ -12,6 +12,8 @@ export type AttendanceStatus = '출석' | '결석' | '보강' | '예정';
 
 export type SeasonType = '학기중' | '방학중';
 
+export type Gender = '남' | '여';
+
 export interface RegularScheduleEntry {
   day: DayOfWeek;
   startTime: string; // "HH:mm"
@@ -20,6 +22,7 @@ export interface RegularScheduleEntry {
 export interface Student {
   id: string;
   name: string;
+  gender?: Gender;
   grade: StudentGrade;
   level: ClassLevel;
   classDuration: ClassDuration;
@@ -156,7 +159,7 @@ export interface SpecialClass {
   startDate: string;
   endDate: string;
   schedule: { day: DayOfWeek; startTime: string }[];
-  duration: ClassDuration;
+  duration: number; // 임의 수업 시간 (분)
   maxStudents: number;
   fee: number;
   memo: string;

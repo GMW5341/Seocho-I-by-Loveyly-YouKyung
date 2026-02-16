@@ -1,6 +1,6 @@
 import { format, parse, addMinutes, isAfter, isBefore, isSameDay, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import type { ClassDuration, DayOfWeek, AcademySettings } from '../types';
+import type { DayOfWeek, AcademySettings } from '../types';
 
 export const DAY_MAP: Record<DayOfWeek, number> = {
   '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6
@@ -50,7 +50,7 @@ export function generateTimeSlots(startTime: string, endTime: string, intervalMi
   return slots;
 }
 
-export function getEndTime(startTime: string, duration: ClassDuration): string {
+export function getEndTime(startTime: string, duration: number): string {
   const start = parse(startTime, 'HH:mm', new Date());
   return format(addMinutes(start, duration), 'HH:mm');
 }
@@ -147,7 +147,7 @@ export function getClassLevelColor(level: string): string {
   }
 }
 
-export function getDurationColor(duration: ClassDuration): string {
+export function getDurationColor(duration: number): string {
   switch (duration) {
     case 60: return 'bg-amber-50 border-amber-300';
     case 80: return 'bg-sky-50 border-sky-300';
@@ -172,7 +172,15 @@ export function layoutSlotsForDay(
 ): Map<string, { column: number; numColumns: number }> {
   if (daySlots.length === 0) return new Map();
 
-  const sorted = [...daySlots].sort((a, b) => {
+  // De-duplicate by id (prevent same slot appearing twice)
+  const seen = new Set<string>();
+  const uniqueSlots = daySlots.filter(s => {
+    if (seen.has(s.id)) return false;
+    seen.add(s.id);
+    return true;
+  });
+
+  const sorted = [...uniqueSlots].sort((a, b) => {
     const diff = timeToMinutes(a.startTime) - timeToMinutes(b.startTime);
     return diff !== 0 ? diff : b.duration - a.duration;
   });
@@ -194,13 +202,45 @@ export function layoutSlotsForDay(
     placed.push({ id: slot.id, column: col, startMin, endMin });
   }
 
+  // Build connected overlap groups for consistent numColumns
+  const groups: number[][] = [];
+  const groupOf = new Map<number, number>(); // index → group index
+
+  for (let i = 0; i < placed.length; i++) {
+    let assignedGroup = -1;
+    for (let j = 0; j < i; j++) {
+      if (placed[j].endMin > placed[i].startMin && placed[j].startMin < placed[i].endMin) {
+        const jGroup = groupOf.get(j)!;
+        if (assignedGroup === -1) {
+          assignedGroup = jGroup;
+          groups[jGroup].push(i);
+          groupOf.set(i, jGroup);
+        } else if (assignedGroup !== jGroup) {
+          // Merge groups
+          const mergeFrom = Math.max(assignedGroup, jGroup);
+          const mergeInto = Math.min(assignedGroup, jGroup);
+          for (const idx of groups[mergeFrom]) {
+            groupOf.set(idx, mergeInto);
+            groups[mergeInto].push(idx);
+          }
+          groups[mergeFrom] = [];
+          assignedGroup = mergeInto;
+        }
+      }
+    }
+    if (assignedGroup === -1) {
+      assignedGroup = groups.length;
+      groups.push([i]);
+      groupOf.set(i, assignedGroup);
+    }
+  }
+
   const result = new Map<string, { column: number; numColumns: number }>();
-  for (const p of placed) {
-    const overlapping = placed.filter(other =>
-      other.endMin > p.startMin && other.startMin < p.endMin
-    );
-    const numColumns = Math.max(...overlapping.map(o => o.column + 1));
-    result.set(p.id, { column: p.column, numColumns });
+  for (let i = 0; i < placed.length; i++) {
+    const gIdx = groupOf.get(i)!;
+    const groupMembers = groups[gIdx];
+    const numColumns = Math.max(...groupMembers.map(idx => placed[idx].column + 1));
+    result.set(placed[i].id, { column: placed[i].column, numColumns });
   }
 
   return result;

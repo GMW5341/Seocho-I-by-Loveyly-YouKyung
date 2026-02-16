@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Student, ClassDuration, ClassLevel, StudentGrade, DayOfWeek, RegularScheduleEntry } from '../../types';
+import type { Student, ClassDuration, ClassLevel, StudentGrade, Gender, DayOfWeek, RegularScheduleEntry } from '../../types';
 import { DAYS_OF_WEEK } from '../../utils/helpers';
 
 interface StudentFormProps {
@@ -21,6 +21,7 @@ function getInitialSchedule(student?: Student): RegularScheduleEntry[] {
 
 export default function StudentForm({ student, onSubmit, onCancel }: StudentFormProps) {
   const [name, setName] = useState(student?.name || '');
+  const [gender, setGender] = useState<Gender | undefined>(student?.gender);
   const [grade, setGrade] = useState<StudentGrade>(student?.grade || '6세');
   const [level, setLevel] = useState<ClassLevel>(student?.level || '유아반');
   const [classDuration, setClassDuration] = useState<ClassDuration>(student?.classDuration || 60);
@@ -54,6 +55,7 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
     if (!name.trim()) return;
     onSubmit({
       name: name.trim(),
+      gender,
       grade,
       level,
       classDuration,
@@ -77,6 +79,26 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
           placeholder="원생 이름"
           required
         />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">성별</label>
+        <div className="flex gap-2">
+          {(['남', '여'] as Gender[]).map(g => (
+            <button
+              type="button"
+              key={g}
+              onClick={() => setGender(g)}
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium border ${
+                gender === g
+                  ? g === '남' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-pink-50 border-pink-300 text-pink-700'
+                  : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {g}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div>
