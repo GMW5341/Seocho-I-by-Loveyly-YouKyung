@@ -1,6 +1,7 @@
 import { initializeApp, getApps, deleteApp, type FirebaseApp } from 'firebase/app';
 import {
-  getFirestore, doc, setDoc, getDoc, onSnapshot, type Firestore, type Unsubscribe,
+  getFirestore, doc, setDoc, getDoc, onSnapshot, collection, getDocs, writeBatch,
+  type Firestore, type Unsubscribe,
 } from 'firebase/firestore';
 
 // All localStorage keys used by the app
@@ -14,6 +15,8 @@ const ALL_STORAGE_KEYS = [
 const SYNC_CONFIG_KEY = 'seocho_firebase_config';
 const SYNC_ROOM_KEY = 'seocho_sync_room';
 const SYNC_ENABLED_KEY = 'seocho_sync_enabled';
+const DATA_SUB = 'data'; // subcollection name
+const MAX_FIELD_BYTES = 800_000; // safe limit (Firestore max ~1,048,487)
 
 export interface FirebaseConfig {
   apiKey: string;
@@ -30,75 +33,188 @@ let unsubscribe: Unsubscribe | null = null;
 let lastPushTimestamp = '';
 let initialSnapshotReceived = false;
 
-/** Check if the first Firestore snapshot has been received (safe to push) */
-export function hasReceivedInitialSnapshot(): boolean {
-  return initialSnapshotReceived;
+// ─── Helpers ───────────────────────────────────────────────
+
+const encoder = new TextEncoder();
+function byteLen(s: string): number { return encoder.encode(s).byteLength; }
+
+/** Split a string into chunks that each fit within maxBytes (UTF-8) */
+function chunkString(s: string, maxBytes: number): string[] {
+  if (byteLen(s) <= maxBytes) return [s];
+  const chunks: string[] = [];
+  let start = 0;
+  while (start < s.length) {
+    let end = Math.min(s.length, start + maxBytes);
+    let chunk = s.slice(start, end);
+    while (byteLen(chunk) > maxBytes && end > start + 1) {
+      end = Math.floor(start + (end - start) * 0.8);
+      chunk = s.slice(start, end);
+    }
+    chunks.push(chunk);
+    start = end;
+  }
+  return chunks;
 }
+
+// ─── Config getters/setters ────────────────────────────────
 
 export function getSyncConfig(): FirebaseConfig | null {
   try {
     const raw = localStorage.getItem(SYNC_CONFIG_KEY);
     return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
-
 export function saveSyncConfig(config: FirebaseConfig): void {
   localStorage.setItem(SYNC_CONFIG_KEY, JSON.stringify(config));
 }
-
 export function getSyncRoom(): string {
   return localStorage.getItem(SYNC_ROOM_KEY) || '';
 }
-
 export function saveSyncRoom(room: string): void {
   localStorage.setItem(SYNC_ROOM_KEY, room);
 }
-
 export function isSyncEnabled(): boolean {
   return localStorage.getItem(SYNC_ENABLED_KEY) === 'true';
 }
-
 export function setSyncEnabled(enabled: boolean): void {
   localStorage.setItem(SYNC_ENABLED_KEY, String(enabled));
 }
+export function hasReceivedInitialSnapshot(): boolean {
+  return initialSnapshotReceived;
+}
+
+// ─── Firebase init ─────────────────────────────────────────
 
 function initFirebase(config: FirebaseConfig): boolean {
   try {
     if (app && db) return true;
-    // Reuse existing Firebase app if already initialized
-    const existingApps = getApps();
-    const defaultApp = existingApps.find(a => a.name === '[DEFAULT]');
-    if (defaultApp) {
-      app = defaultApp;
-    } else {
-      app = initializeApp(config);
-    }
+    const existing = getApps().find(a => a.name === '[DEFAULT]');
+    app = existing || initializeApp(config);
     db = getFirestore(app);
     return true;
   } catch (e) {
     console.error('Firebase init failed:', e);
-    app = null;
-    db = null;
+    app = null; db = null;
     return false;
   }
 }
 
-/** Gather all localStorage data into a single object */
+// ─── Core read/write (subcollection format) ────────────────
+
+/**
+ * Write data to Firestore using per-key subcollection documents.
+ * Large values are automatically chunked.
+ *
+ * Structure:
+ *   academies/{room}              → { _updatedAt, _version: 2 }
+ *   academies/{room}/data/{key}   → { v: "..." }                    (small value)
+ *   academies/{room}/data/{key}   → { _chunked: true, _count: N }   (large value metadata)
+ *   academies/{room}/data/{key}__0 → { v: "chunk0" }
+ *   academies/{room}/data/{key}__1 → { v: "chunk1" }
+ */
+async function writeCloudData(
+  firestore: Firestore,
+  room: string,
+  kvData: Record<string, string>,
+): Promise<string> {
+  const updatedAt = new Date().toISOString();
+
+  // Firestore batch limit is 500 ops; we won't exceed that with ~13 keys + chunks
+  const batch = writeBatch(firestore);
+
+  // Metadata document
+  const roomRef = doc(firestore, 'academies', room);
+  batch.set(roomRef, { _updatedAt: updatedAt, _version: 2 });
+
+  for (const key of ALL_STORAGE_KEYS) {
+    const val = kvData[key];
+    if (val === undefined || val === '') continue;
+
+    const keyRef = doc(firestore, 'academies', room, DATA_SUB, key);
+
+    if (byteLen(val) <= MAX_FIELD_BYTES) {
+      batch.set(keyRef, { v: val });
+    } else {
+      const chunks = chunkString(val, MAX_FIELD_BYTES);
+      batch.set(keyRef, { _chunked: true, _count: chunks.length });
+      for (let i = 0; i < chunks.length; i++) {
+        const chunkRef = doc(firestore, 'academies', room, DATA_SUB, `${key}__${i}`);
+        batch.set(chunkRef, { v: chunks[i] });
+      }
+    }
+  }
+
+  await batch.commit();
+  return updatedAt;
+}
+
+/**
+ * Read all data from Firestore.
+ * Supports both old format (single doc) and new format (subcollection).
+ */
+async function readCloudData(
+  firestore: Firestore,
+  room: string,
+): Promise<{ data: Record<string, string>; updatedAt: string } | null> {
+  const roomRef = doc(firestore, 'academies', room);
+  const roomSnap = await getDoc(roomRef);
+  if (!roomSnap.exists()) return null;
+
+  const meta = roomSnap.data();
+
+  // ── New format (v2): subcollection ──
+  if (meta._version === 2) {
+    const colRef = collection(firestore, 'academies', room, DATA_SUB);
+    const colSnap = await getDocs(colRef);
+
+    // Organize docs by key name
+    const docsMap = new Map<string, Record<string, unknown>>();
+    colSnap.forEach(d => docsMap.set(d.id, d.data()));
+
+    const result: Record<string, string> = {};
+    for (const key of ALL_STORAGE_KEYS) {
+      const d = docsMap.get(key);
+      if (!d) continue;
+
+      if (d._chunked) {
+        // Reassemble chunks
+        const count = d._count as number;
+        let assembled = '';
+        for (let i = 0; i < count; i++) {
+          const chunkDoc = docsMap.get(`${key}__${i}`);
+          if (chunkDoc) assembled += chunkDoc.v as string;
+        }
+        result[key] = assembled;
+      } else {
+        result[key] = d.v as string;
+      }
+    }
+
+    return { data: result, updatedAt: (meta._updatedAt as string) || '' };
+  }
+
+  // ── Old format (v1): single document ──
+  const result: Record<string, string> = {};
+  for (const key of ALL_STORAGE_KEYS) {
+    if (meta[key] !== undefined) result[key] = meta[key] as string;
+  }
+  return { data: result, updatedAt: (meta._updatedAt as string) || '' };
+}
+
+// ─── Public API ────────────────────────────────────────────
+
+/** Gather all localStorage data */
 function gatherLocalData(): Record<string, string> {
   const data: Record<string, string> = {};
   ALL_STORAGE_KEYS.forEach(key => {
     const val = localStorage.getItem(key);
     if (val) data[key] = val;
   });
-  data._updatedAt = new Date().toISOString();
   return data;
 }
 
 /** Push current localStorage data to Firestore */
 export async function pushToCloud(): Promise<boolean> {
-  // Auto-initialize Firebase if needed
   if (!db) {
     const config = getSyncConfig();
     if (!config || !initFirebase(config)) return false;
@@ -108,8 +224,7 @@ export async function pushToCloud(): Promise<boolean> {
   if (!room) return false;
   try {
     const data = gatherLocalData();
-    lastPushTimestamp = data._updatedAt;
-    await setDoc(doc(db, 'academies', room), data);
+    lastPushTimestamp = await writeCloudData(db, room, data);
     return true;
   } catch (e) {
     console.error('Push to cloud failed:', e);
@@ -117,11 +232,7 @@ export async function pushToCloud(): Promise<boolean> {
   }
 }
 
-/**
- * Fetch cloud data ONCE and apply to localStorage.
- * Called BEFORE React renders so state initializes with cloud data.
- * Returns true if cloud data was applied.
- */
+/** Fetch cloud data ONCE and apply to localStorage (before React renders) */
 export async function fetchCloudData(): Promise<boolean> {
   const config = getSyncConfig();
   const room = getSyncRoom();
@@ -130,38 +241,27 @@ export async function fetchCloudData(): Promise<boolean> {
   if (!db) return false;
 
   try {
-    const docRef = doc(db, 'academies', room);
-    const snapshot = await getDoc(docRef);
+    const result = await readCloudData(db, room);
 
-    if (!snapshot.exists()) {
-      // No cloud data - push local data up
+    if (!result) {
       await pushToCloud();
       return false;
     }
 
-    const cloudData = snapshot.data();
-    if (!cloudData) return false;
-
-    const hasCloudData = ALL_STORAGE_KEYS.some(key => cloudData[key] !== undefined);
-    if (!hasCloudData) {
-      // Cloud doc exists but no real data - push local data up
+    const hasData = ALL_STORAGE_KEYS.some(key => result.data[key] !== undefined);
+    if (!hasData) {
       await pushToCloud();
       return false;
     }
 
-    // Apply cloud data to localStorage
+    // Apply to localStorage
     ALL_STORAGE_KEYS.forEach(key => {
-      const cloudVal = cloudData[key] as string | undefined;
-      if (cloudVal !== undefined) {
-        localStorage.setItem(key, cloudVal);
+      if (result.data[key] !== undefined) {
+        localStorage.setItem(key, result.data[key]);
       }
     });
 
-    // Set lastPushTimestamp so the realtime listener doesn't re-trigger
-    if (cloudData._updatedAt) {
-      lastPushTimestamp = cloudData._updatedAt as string;
-    }
-
+    lastPushTimestamp = result.updatedAt;
     return true;
   } catch (e) {
     console.error('Fetch cloud data failed:', e);
@@ -169,43 +269,51 @@ export async function fetchCloudData(): Promise<boolean> {
   }
 }
 
-/** Start real-time listening for changes from OTHER devices (after initial load) */
+/** Start real-time listening for changes from OTHER devices */
 export function startRealtimeSync(onDataReceived?: () => void): boolean {
   const config = getSyncConfig();
   const room = getSyncRoom();
   if (!config || !room) return false;
-
   if (!initFirebase(config)) return false;
   if (!db) return false;
 
-  // Stop existing listener
   stopSync();
   initialSnapshotReceived = false;
 
-  const docRef = doc(db, 'academies', room);
-  unsubscribe = onSnapshot(docRef, (snapshot) => {
-    initialSnapshotReceived = true;
+  const capturedDb = db;
+  const roomRef = doc(capturedDb, 'academies', room);
 
+  // Listen to the metadata document only; when _updatedAt changes, fetch full data
+  unsubscribe = onSnapshot(roomRef, async (snapshot) => {
+    initialSnapshotReceived = true;
     if (!snapshot.exists()) return;
-    const cloudData = snapshot.data();
-    if (!cloudData) return;
+
+    const meta = snapshot.data();
+    if (!meta) return;
 
     // Skip our own writes
-    if (cloudData._updatedAt && cloudData._updatedAt === lastPushTimestamp) return;
+    if (meta._updatedAt && meta._updatedAt === lastPushTimestamp) return;
 
-    // Apply cloud data to localStorage
-    let changed = false;
-    ALL_STORAGE_KEYS.forEach(key => {
-      const cloudVal = cloudData[key] as string | undefined;
-      const localVal = localStorage.getItem(key);
-      if (cloudVal !== undefined && cloudVal !== localVal) {
-        localStorage.setItem(key, cloudVal);
-        changed = true;
+    try {
+      const result = await readCloudData(capturedDb, room);
+      if (!result) return;
+
+      let changed = false;
+      ALL_STORAGE_KEYS.forEach(key => {
+        const cloudVal = result.data[key];
+        const localVal = localStorage.getItem(key);
+        if (cloudVal !== undefined && cloudVal !== localVal) {
+          localStorage.setItem(key, cloudVal);
+          changed = true;
+        }
+      });
+
+      if (changed) {
+        lastPushTimestamp = result.updatedAt;
+        if (onDataReceived) onDataReceived();
       }
-    });
-
-    if (changed && onDataReceived) {
-      onDataReceived();
+    } catch (e) {
+      console.error('Realtime sync read failed:', e);
     }
   }, (error) => {
     console.error('Realtime sync error:', error);
@@ -216,17 +324,15 @@ export function startRealtimeSync(onDataReceived?: () => void): boolean {
 
 /** Stop real-time listener */
 export function stopSync(): void {
-  if (unsubscribe) {
-    unsubscribe();
-    unsubscribe = null;
-  }
+  if (unsubscribe) { unsubscribe(); unsubscribe = null; }
 }
 
 /** Test Firebase connection */
-export async function testConnection(config: FirebaseConfig, room: string): Promise<{ success: boolean; message: string }> {
+export async function testConnection(
+  config: FirebaseConfig, room: string,
+): Promise<{ success: boolean; message: string }> {
   let testApp: FirebaseApp | null = null;
   try {
-    // Clean up any existing test app first
     const existing = getApps().find(a => a.name === 'test-connection');
     if (existing) await deleteApp(existing);
 
@@ -237,19 +343,17 @@ export async function testConnection(config: FirebaseConfig, room: string): Prom
     await deleteApp(testApp);
     return { success: true, message: '연결 성공!' };
   } catch (e) {
-    if (testApp) {
-      try { await deleteApp(testApp); } catch { /* ignore cleanup error */ }
-    }
+    if (testApp) { try { await deleteApp(testApp); } catch { /* ignore */ } }
     const msg = e instanceof Error ? e.message : String(e);
     return { success: false, message: `연결 실패: ${msg}` };
   }
 }
 
-/** Upload JSON backup data directly to Firestore (bypasses all sync logic) */
+/** Upload JSON backup directly to Firestore (bypasses sync logic) */
 export async function uploadJsonToCloud(
   jsonData: Record<string, unknown>,
   config?: FirebaseConfig,
-  room?: string
+  room?: string,
 ): Promise<{ success: boolean; message: string }> {
   const useConfig = config || getSyncConfig();
   const useRoom = room || getSyncRoom();
@@ -259,58 +363,44 @@ export async function uploadJsonToCloud(
 
   let uploadApp: FirebaseApp | null = null;
   try {
-    // Use a separate app instance to avoid interfering with sync
     const existing = getApps().find(a => a.name === 'json-upload');
     if (existing) await deleteApp(existing);
 
     uploadApp = initializeApp(useConfig, 'json-upload');
     const uploadDb = getFirestore(uploadApp);
 
-    // Build the cloud document from JSON data
-    const cloudDoc: Record<string, string> = {
-      _updatedAt: new Date().toISOString(),
-    };
-
-    // Support both old format (short keys) and new format (full keys)
+    // Build key-value map from JSON (support old & new key formats)
+    const kvData: Record<string, string> = {};
     const keyMap: Record<string, string> = {
       students: 'seocho_students', schedules: 'seocho_schedules',
       attendance: 'seocho_attendance', payments: 'seocho_payments',
       holidays: 'seocho_holidays', settings: 'seocho_settings',
     };
 
-    // New format (full storage keys)
     ALL_STORAGE_KEYS.forEach(key => {
       if (jsonData[key] != null) {
-        cloudDoc[key] = typeof jsonData[key] === 'string'
-          ? jsonData[key] as string
-          : JSON.stringify(jsonData[key]);
+        kvData[key] = typeof jsonData[key] === 'string'
+          ? jsonData[key] as string : JSON.stringify(jsonData[key]);
       }
     });
-
-    // Old format (short keys) as fallback
     Object.entries(keyMap).forEach(([shortKey, fullKey]) => {
-      if (jsonData[shortKey] != null && !cloudDoc[fullKey]) {
-        cloudDoc[fullKey] = typeof jsonData[shortKey] === 'string'
-          ? jsonData[shortKey] as string
-          : JSON.stringify(jsonData[shortKey]);
+      if (jsonData[shortKey] != null && !kvData[fullKey]) {
+        kvData[fullKey] = typeof jsonData[shortKey] === 'string'
+          ? jsonData[shortKey] as string : JSON.stringify(jsonData[shortKey]);
       }
     });
 
-    const hasData = ALL_STORAGE_KEYS.some(key => cloudDoc[key] !== undefined);
+    const hasData = ALL_STORAGE_KEYS.some(key => kvData[key] !== undefined);
     if (!hasData) {
       await deleteApp(uploadApp);
       return { success: false, message: 'JSON 파일에 유효한 데이터가 없습니다.' };
     }
 
-    const docRef = doc(uploadDb, 'academies', useRoom);
-    await setDoc(docRef, cloudDoc);
+    await writeCloudData(uploadDb, useRoom, kvData);
     await deleteApp(uploadApp);
-
     return { success: true, message: '클라우드에 업로드 완료!' };
   } catch (e) {
-    if (uploadApp) {
-      try { await deleteApp(uploadApp); } catch { /* ignore */ }
-    }
+    if (uploadApp) { try { await deleteApp(uploadApp); } catch { /* ignore */ } }
     const msg = e instanceof Error ? e.message : String(e);
     return { success: false, message: `업로드 실패: ${msg}` };
   }
@@ -320,26 +410,20 @@ export async function uploadJsonToCloud(
 export async function setupSync(
   config: FirebaseConfig,
   room: string,
-  onDataReceived?: () => void
+  onDataReceived?: () => void,
 ): Promise<boolean> {
   saveSyncConfig(config);
   saveSyncRoom(room);
   setSyncEnabled(true);
-
-  // Reset module-level references (initFirebase will reuse existing app)
-  app = null;
-  db = null;
+  app = null; db = null;
   if (!initFirebase(config)) return false;
 
-  // If local has meaningful data, push it to cloud FIRST.
-  // This prevents the realtime listener from overwriting local data with old cloud data.
-  // For a new/empty device, skip the push so the listener can pull cloud data instead.
+  // If local has data, push first so listener doesn't overwrite it
   const localData = gatherLocalData();
   const hasLocalData = ALL_STORAGE_KEYS.some(key => {
     const val = localData[key];
     return val !== undefined && val !== '[]' && val !== '';
   });
-
   if (hasLocalData) {
     await pushToCloud();
   }
@@ -378,7 +462,5 @@ export function checkUrlForSyncConfig(): { config: FirebaseConfig; room: string 
       return { config: data.c, room: data.r };
     }
     return null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
