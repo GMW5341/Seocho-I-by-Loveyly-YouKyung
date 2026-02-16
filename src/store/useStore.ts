@@ -2,7 +2,8 @@ import { useState, useCallback, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type {
   Student, ScheduleSlot, AttendanceRecord, Payment, Holiday,
-  AcademySettings, TabType, TrialStudent, TrialLesson, CurriculumFile, MessageTemplate
+  AcademySettings, TabType, TrialStudent, TrialLesson, CurriculumFile, MessageTemplate,
+  SpecialClass, SpecialClassStudent
 } from '../types';
 import { DEFAULT_SETTINGS } from '../utils/helpers';
 
@@ -17,6 +18,8 @@ const STORAGE_KEYS = {
   trialLessons: 'seocho_trial_lessons',
   curriculum: 'seocho_curriculum',
   messageTemplates: 'seocho_message_templates',
+  specialClasses: 'seocho_special_classes',
+  specialClassStudents: 'seocho_special_class_students',
 };
 
 function loadFromStorage<T>(key: string, fallback: T): T {
@@ -70,6 +73,8 @@ export function useStore() {
   const [trialLessons, setTrialLessons] = useState<TrialLesson[]>(() => loadFromStorage(STORAGE_KEYS.trialLessons, []));
   const [curriculum, setCurriculum] = useState<CurriculumFile[]>(() => loadFromStorage(STORAGE_KEYS.curriculum, []));
   const [messageTemplates, setMessageTemplates] = useState<MessageTemplate[]>(() => loadFromStorage(STORAGE_KEYS.messageTemplates, []));
+  const [specialClasses, setSpecialClasses] = useState<SpecialClass[]>(() => loadFromStorage(STORAGE_KEYS.specialClasses, []));
+  const [specialClassStudents, setSpecialClassStudents] = useState<SpecialClassStudent[]>(() => loadFromStorage(STORAGE_KEYS.specialClassStudents, []));
 
   // Persist to localStorage on changes
   useEffect(() => { saveToStorage(STORAGE_KEYS.students, students); }, [students]);
@@ -82,6 +87,8 @@ export function useStore() {
   useEffect(() => { saveToStorage(STORAGE_KEYS.trialLessons, trialLessons); }, [trialLessons]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.curriculum, curriculum); }, [curriculum]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.messageTemplates, messageTemplates); }, [messageTemplates]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.specialClasses, specialClasses); }, [specialClasses]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.specialClassStudents, specialClassStudents); }, [specialClassStudents]);
 
   // Student CRUD
   const addStudent = useCallback((student: Omit<Student, 'id' | 'createdAt' | 'active'>) => {
@@ -348,6 +355,36 @@ export function useStore() {
     setMessageTemplates(prev => prev.filter(t => t.id !== id));
   }, []);
 
+  // Special Class CRUD
+  const addSpecialClass = useCallback((data: Omit<SpecialClass, 'id' | 'createdAt' | 'active'>) => {
+    const newClass: SpecialClass = { ...data, id: uuidv4(), active: true, createdAt: new Date().toISOString() };
+    setSpecialClasses(prev => [...prev, newClass]);
+    return newClass;
+  }, []);
+
+  const updateSpecialClass = useCallback((id: string, updates: Partial<SpecialClass>) => {
+    setSpecialClasses(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+  }, []);
+
+  const deleteSpecialClass = useCallback((id: string) => {
+    setSpecialClasses(prev => prev.filter(c => c.id !== id));
+    setSpecialClassStudents(prev => prev.filter(s => s.specialClassId !== id));
+  }, []);
+
+  const addSpecialClassStudent = useCallback((data: Omit<SpecialClassStudent, 'id' | 'createdAt'>) => {
+    const newStudent: SpecialClassStudent = { ...data, id: uuidv4(), createdAt: new Date().toISOString() };
+    setSpecialClassStudents(prev => [...prev, newStudent]);
+    return newStudent;
+  }, []);
+
+  const updateSpecialClassStudent = useCallback((id: string, updates: Partial<SpecialClassStudent>) => {
+    setSpecialClassStudents(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+  }, []);
+
+  const deleteSpecialClassStudent = useCallback((id: string) => {
+    setSpecialClassStudents(prev => prev.filter(s => s.id !== id));
+  }, []);
+
   // Helper: get student's active payment
   const getActivePayment = useCallback((studentId: string): Payment | undefined => {
     return payments.find(p => p.studentId === studentId && !p.completed && p.remainingSessions > 0);
@@ -372,6 +409,8 @@ export function useStore() {
     trialLessons, addTrialLesson, updateTrialLesson, deleteTrialLesson,
     curriculum, addCurriculumFile, updateCurriculumFile, reorderCurriculum, deleteCurriculumFile,
     messageTemplates, addMessageTemplate, updateMessageTemplate, deleteMessageTemplate,
+    specialClasses, addSpecialClass, updateSpecialClass, deleteSpecialClass,
+    specialClassStudents, addSpecialClassStudent, updateSpecialClassStudent, deleteSpecialClassStudent,
     getActivePayment, getAttendanceByDateRange,
   };
 }

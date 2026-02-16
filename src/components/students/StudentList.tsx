@@ -1,13 +1,17 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '../../store/StoreContext';
-import type { Student, ClassLevel } from '../../types';
+import type { Student, ClassLevel, StudentGrade } from '../../types';
 import { getClassLevelColor } from '../../utils/helpers';
+
+const GRADE_ORDER: Record<StudentGrade, number> = {
+  '6세': 0, '7세': 1, '초등1': 2, '초등2': 3, '초등3': 4, '초등4': 5, '초등5': 6, '초등6': 7,
+};
 import Modal from '../common/Modal';
 import StudentForm from './StudentForm';
 import Badge from '../common/Badge';
 
 export default function StudentList() {
-  const { students, addStudent, updateStudent, deleteStudent, permanentDeleteStudent, payments, addSchedule } = useAppStore();
+  const { students, schedules, addStudent, updateStudent, deleteStudent, permanentDeleteStudent, payments, addSchedule, removeSchedule } = useAppStore();
   const [showForm, setShowForm] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | undefined>();
   const [searchQuery, setSearchQuery] = useState('');
@@ -20,6 +24,11 @@ export default function StudentList() {
       if (filterLevel !== '전체' && s.level !== filterLevel) return false;
       if (searchQuery && !s.name.includes(searchQuery)) return false;
       return true;
+    }).sort((a, b) => {
+      const gradeA = GRADE_ORDER[a.grade] ?? 99;
+      const gradeB = GRADE_ORDER[b.grade] ?? 99;
+      if (gradeA !== gradeB) return gradeA - gradeB;
+      return a.name.localeCompare(b.name, 'ko');
     });
   }, [students, showInactive, filterLevel, searchQuery]);
 
@@ -41,6 +50,18 @@ export default function StudentList() {
   const handleEdit = (data: Omit<Student, 'id' | 'createdAt' | 'active'>) => {
     if (editingStudent) {
       updateStudent(editingStudent.id, data);
+      // Sync schedules: remove old regular schedules and create new ones
+      const oldRegularSlots = schedules.filter(s => s.studentId === editingStudent.id && s.isRegular);
+      oldRegularSlots.forEach(slot => removeSchedule(slot.id));
+      (data.regularSchedule || []).forEach(entry => {
+        addSchedule({
+          studentId: editingStudent.id,
+          dayOfWeek: entry.day,
+          startTime: entry.startTime,
+          duration: data.classDuration,
+          isRegular: true,
+        });
+      });
       setEditingStudent(undefined);
     }
   };

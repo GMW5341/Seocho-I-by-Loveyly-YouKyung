@@ -150,4 +150,31 @@ export interface MessageTemplate {
   createdAt: string;
 }
 
-export type TabType = 'curriculum' | 'dashboard' | 'schedule' | 'students' | 'attendance' | 'payments' | 'trial' | 'messages' | 'settings';
+export interface SpecialClass {
+  id: string;
+  name: string; // 수업 이름
+  startDate: string;
+  endDate: string;
+  schedule: { day: DayOfWeek; startTime: string }[];
+  duration: ClassDuration;
+  maxStudents: number;
+  fee: number;
+  memo: string;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface SpecialClassStudent {
+  id: string;
+  specialClassId: string;
+  name: string;
+  grade: StudentGrade;
+  phone: string;
+  parentPhone: string;
+  paid: boolean;
+  amount: number;
+  memo: string;
+  createdAt: string;
+}
+
+export type TabType = 'curriculum' | 'dashboard' | 'schedule' | 'students' | 'attendance' | 'payments' | 'trial' | 'messages' | 'special' | 'settings';

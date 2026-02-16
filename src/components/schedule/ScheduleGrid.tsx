@@ -91,8 +91,14 @@ export default function ScheduleGrid() {
 
     if (existing) {
       if (existing.status === status) {
+        // Toggle off: if memo exists, keep the record but preserve memo
+        if (existing.memo) {
+          // Don't delete - just keep as-is to preserve memo
+          return;
+        }
         deleteAttendance(existing.id);
       } else {
+        // Change status - memo is preserved automatically
         updateAttendance(existing.id, { status });
       }
     } else {
@@ -313,6 +319,21 @@ export default function ScheduleGrid() {
     );
     if (existing) {
       updateAttendance(existing.id, { memo: memoSlot.memo });
+    } else if (memoSlot.memo.trim()) {
+      // Create a new attendance record with memo (status: 예정)
+      const student = getStudentById(memoSlot.studentId);
+      const slot = schedules.find(s => s.id === memoSlot.slotId);
+      if (student && slot) {
+        addAttendance({
+          studentId: memoSlot.studentId,
+          date: memoSlot.date,
+          status: '예정',
+          startTime: memoSlot.startTime,
+          duration: slot.duration,
+          isMakeup: false,
+          memo: memoSlot.memo,
+        });
+      }
     }
     setMemoSlot(null);
   };
