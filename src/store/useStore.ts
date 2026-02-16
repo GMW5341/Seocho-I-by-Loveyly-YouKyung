@@ -147,11 +147,74 @@ export function useStore() {
   }, []);
 
   const updateAttendance = useCallback((id: string, updates: Partial<AttendanceRecord>) => {
-    setAttendance(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r));
+    setAttendance(prev => {
+      const existing = prev.find(r => r.id === id);
+      if (existing && updates.status && updates.status !== existing.status) {
+        const wasCountable = existing.status === '출석' || existing.status === '보강';
+        const willBeCountable = updates.status === '출석' || updates.status === '보강';
+
+        if (wasCountable && !willBeCountable) {
+          // Was counted, now not (e.g. 출석→결석): restore session
+          setPayments(p => {
+            const activePayment = p.find(pay =>
+              pay.studentId === existing.studentId && !pay.completed
+            );
+            if (activePayment) {
+              return p.map(pay => pay.id === activePayment.id ? {
+                ...pay,
+                usedSessions: Math.max(0, pay.usedSessions - 1),
+                remainingSessions: pay.remainingSessions + 1,
+                completed: false,
+              } : pay);
+            }
+            return p;
+          });
+        } else if (!wasCountable && willBeCountable) {
+          // Was not counted, now counted (e.g. 결석→출석): consume session
+          setPayments(p => {
+            const activePayment = p.find(pay =>
+              pay.studentId === existing.studentId && !pay.completed && pay.remainingSessions > 0
+            );
+            if (activePayment) {
+              return p.map(pay => pay.id === activePayment.id ? {
+                ...pay,
+                usedSessions: pay.usedSessions + 1,
+                remainingSessions: pay.remainingSessions - 1,
+                completed: pay.remainingSessions - 1 <= 0,
+              } : pay);
+            }
+            return p;
+          });
+        }
+      }
+      return prev.map(r => r.id === id ? { ...r, ...updates } : r);
+    });
   }, []);
 
   const deleteAttendance = useCallback((id: string) => {
-    setAttendance(prev => prev.filter(r => r.id !== id));
+    setAttendance(prev => {
+      const existing = prev.find(r => r.id === id);
+      // If deleting a counted attendance record, restore the session
+      if (existing && (existing.status === '출석' || existing.status === '보강')) {
+        setPayments(p => {
+          const activePayment = p.find(pay =>
+            pay.studentId === existing.studentId && !pay.completed
+          ) || p.find(pay =>
+            pay.studentId === existing.studentId && pay.completed && pay.remainingSessions === 0
+          );
+          if (activePayment) {
+            return p.map(pay => pay.id === activePayment.id ? {
+              ...pay,
+              usedSessions: Math.max(0, pay.usedSessions - 1),
+              remainingSessions: pay.remainingSessions + 1,
+              completed: false,
+            } : pay);
+          }
+          return p;
+        });
+      }
+      return prev.filter(r => r.id !== id);
+    });
   }, []);
 
   // Payment CRUD

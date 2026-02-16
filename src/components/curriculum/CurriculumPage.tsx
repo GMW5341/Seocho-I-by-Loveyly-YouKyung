@@ -10,25 +10,20 @@ const CLASS_LEVELS: { level: ClassLevel; label: string; color: string; bgColor: 
   { level: '초등(고학년)', label: '초등 고학년반', color: 'text-green-700', bgColor: 'bg-green-50', borderColor: 'border-green-300' },
 ];
 
-// Compress image to reduce size for localStorage
 function compressImage(dataUrl: string, maxWidth = 1600, quality = 0.8): Promise<string> {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
       let { width, height } = img;
-
       if (width > maxWidth) {
         height = Math.round((height * maxWidth) / width);
         width = maxWidth;
       }
-
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d')!;
       ctx.drawImage(img, 0, 0, width, height);
-
-      // Always output as JPEG for smaller size
       const compressed = canvas.toDataURL('image/jpeg', quality);
       resolve(compressed);
     };
@@ -51,16 +46,12 @@ export default function CurriculumPage() {
         alert('이미지 또는 PDF 파일만 업로드 가능합니다.');
         continue;
       }
-
       const reader = new FileReader();
       reader.onload = async (ev) => {
         let dataUrl = ev.target?.result as string;
-
-        // Compress images to prevent localStorage overflow
         if (isImage) {
           dataUrl = await compressImage(dataUrl);
         }
-
         addCurriculumFile({
           name: file.name,
           type: isImage ? 'image' : 'pdf',
@@ -95,19 +86,21 @@ export default function CurriculumPage() {
     e.preventDefault();
     e.stopPropagation();
     setDraggingLevel(null);
-
     const files = e.dataTransfer.files;
     if (files.length > 0) {
       processFiles(files, classLevel);
     }
   };
 
-  const getFilesForLevel = (level: ClassLevel) =>
-    curriculum.filter(f => f.classLevel === level);
-
-  // Also show legacy files without classLevel in first section
-  const getLegacyFiles = () =>
-    curriculum.filter(f => !f.classLevel);
+  const getFilesForLevel = (level: ClassLevel): CurriculumFile[] => {
+    const levelFiles = curriculum.filter(f => f.classLevel === level);
+    // Include legacy files without classLevel in first section
+    if (level === '유아반') {
+      const legacy = curriculum.filter(f => !f.classLevel);
+      return [...levelFiles, ...legacy];
+    }
+    return levelFiles;
+  };
 
   return (
     <div className="p-6">
@@ -116,17 +109,23 @@ export default function CurriculumPage() {
         <p className="text-sm text-gray-500">반별 커리큘럼을 업로드하고 관리하세요. 드래그하여 업로드하거나 버튼을 클릭하세요.</p>
       </div>
 
-      {/* Three class level sections */}
       <div className="space-y-8">
         {CLASS_LEVELS.map(({ level, label, color, bgColor, borderColor }) => {
-          const files = [...getFilesForLevel(level), ...(level === '유아반' ? getLegacyFiles() : [])];
+          const allFiles = getFilesForLevel(level);
+          // Sort by date descending - latest first
+          const sorted = [...allFiles].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          const currentFile = sorted[0] || null;
+          const pastFiles = sorted.slice(1);
           const isDragging = draggingLevel === level;
 
           return (
             <div key={level} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               {/* Section Header */}
               <div className={`flex items-center justify-between px-5 py-3 ${bgColor} border-b ${borderColor}`}>
-                <h4 className={`text-sm font-bold ${color}`}>{label}</h4>
+                <h4 className={`text-sm font-bold ${color}`}>
+                  {label}
+                  {allFiles.length > 0 && <span className="ml-2 text-xs font-normal opacity-70">{allFiles.length}개</span>}
+                </h4>
                 <button
                   onClick={() => fileInputRefs.current[level]?.click()}
                   className={`${color} ${bgColor} border ${borderColor} px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition-opacity`}
@@ -156,7 +155,7 @@ export default function CurriculumPage() {
                   <div className="flex items-center justify-center h-24">
                     <p className={`text-sm font-medium ${color}`}>여기에 파일을 놓으세요</p>
                   </div>
-                ) : files.length === 0 ? (
+                ) : allFiles.length === 0 ? (
                   <div
                     className="flex flex-col items-center justify-center py-8 border-2 border-dashed border-gray-200 rounded-lg cursor-pointer hover:border-gray-400 transition-colors"
                     onClick={() => fileInputRefs.current[level]?.click()}
@@ -165,73 +164,110 @@ export default function CurriculumPage() {
                     <p className="text-xs text-gray-400">이미지 또는 PDF를 드래그하거나 클릭하여 업로드</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {files.map(file => (
-                      <div key={file.id} className="group relative border border-gray-200 rounded-lg overflow-hidden">
-                        {/* File Header */}
-                        <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-100">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <span className="text-xs font-medium text-gray-700 truncate">{file.name}</span>
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${
-                              file.type === 'image' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'
-                            }`}>
-                              {file.type === 'image' ? 'IMG' : 'PDF'}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => {
-                              if (confirm(`"${file.name}" 파일을 삭제하시겠습니까?`)) deleteCurriculumFile(file.id);
-                            }}
-                            className="text-[10px] text-red-500 hover:text-red-700 font-medium opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2"
-                          >
-                            삭제
-                          </button>
-                        </div>
-
-                        {/* File Preview */}
-                        {file.type === 'image' ? (
-                          <div
-                            className="cursor-pointer overflow-hidden"
-                            onClick={() => setZoomedFile(file)}
-                          >
-                            <img
-                              src={file.dataUrl}
-                              alt={file.name}
-                              className="w-full h-48 object-cover transition-transform duration-300 hover:scale-110"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).style.display = 'none';
-                                (e.target as HTMLImageElement).parentElement!.innerHTML =
-                                  '<div class="flex items-center justify-center h-48 text-sm text-gray-400">이미지를 불러올 수 없습니다</div>';
+                  <div className="flex gap-4">
+                    {/* Current (latest) curriculum - large display */}
+                    <div className="flex-1 min-w-0">
+                      {currentFile && (
+                        <div className="group relative border border-gray-200 rounded-lg overflow-hidden">
+                          <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-100">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${borderColor} border ${bgColor} ${color}`}>
+                                현재
+                              </span>
+                              <span className="text-xs font-medium text-gray-700 truncate">{currentFile.name}</span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${
+                                currentFile.type === 'image' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'
+                              }`}>
+                                {currentFile.type === 'image' ? 'IMG' : 'PDF'}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => {
+                                if (confirm(`"${currentFile.name}" 파일을 삭제하시겠습니까?`)) deleteCurriculumFile(currentFile.id);
                               }}
-                            />
+                              className="text-[10px] text-red-500 hover:text-red-700 font-medium opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2"
+                            >
+                              삭제
+                            </button>
                           </div>
-                        ) : (
-                          <div
-                            className="cursor-pointer"
-                            onClick={() => setZoomedFile(file)}
-                          >
-                            <iframe
-                              src={file.dataUrl}
-                              title={file.name}
-                              className="w-full h-48 pointer-events-none"
-                            />
+                          {currentFile.type === 'image' ? (
+                            <div
+                              className="cursor-pointer overflow-hidden"
+                              onClick={() => setZoomedFile(currentFile)}
+                            >
+                              <img
+                                src={currentFile.dataUrl}
+                                alt={currentFile.name}
+                                className="w-full max-h-[500px] object-contain bg-gray-50 transition-transform duration-300 hover:scale-105"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                  (e.target as HTMLImageElement).parentElement!.innerHTML =
+                                    '<div class="flex items-center justify-center h-48 text-sm text-gray-400">이미지를 불러올 수 없습니다</div>';
+                                }}
+                              />
+                            </div>
+                          ) : (
+                            <div className="cursor-pointer" onClick={() => setZoomedFile(currentFile)}>
+                              <iframe
+                                src={currentFile.dataUrl}
+                                title={currentFile.name}
+                                className="w-full h-[400px] pointer-events-none"
+                              />
+                            </div>
+                          )}
+                          <div className="px-3 py-1.5 text-[10px] text-gray-400">
+                            {format(new Date(currentFile.createdAt), 'yyyy.MM.dd', { locale: ko })}
                           </div>
-                        )}
+                        </div>
+                      )}
+                    </div>
 
-                        <div className="px-3 py-1.5 text-[10px] text-gray-400">
-                          {format(new Date(file.createdAt), 'yyyy.MM.dd', { locale: ko })}
+                    {/* Past curricula - small thumbnails stacked on right */}
+                    {pastFiles.length > 0 && (
+                      <div className="w-36 shrink-0 flex flex-col gap-2">
+                        <div className="text-[10px] font-medium text-gray-400 uppercase tracking-wider px-1">지난 커리큘럼</div>
+                        <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                          {pastFiles.map(file => (
+                            <div
+                              key={file.id}
+                              className="group/past relative border border-gray-200 rounded-lg overflow-hidden cursor-pointer hover:border-gray-400 transition-colors"
+                              onClick={() => setZoomedFile(file)}
+                            >
+                              {file.type === 'image' ? (
+                                <img
+                                  src={file.dataUrl}
+                                  alt={file.name}
+                                  className="w-full h-20 object-cover"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-full h-20 bg-gray-100 flex items-center justify-center">
+                                  <span className="text-[10px] text-red-500 font-medium">PDF</span>
+                                </div>
+                              )}
+                              <div className="px-1.5 py-1 bg-white border-t border-gray-100">
+                                <div className="text-[9px] text-gray-600 truncate">{file.name}</div>
+                                <div className="text-[9px] text-gray-400">
+                                  {format(new Date(file.createdAt), 'yy.MM.dd', { locale: ko })}
+                                </div>
+                              </div>
+                              {/* Delete button on hover */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm(`"${file.name}" 파일을 삭제하시겠습니까?`)) deleteCurriculumFile(file.id);
+                                }}
+                                className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500 text-white rounded-full text-[8px] flex items-center justify-center opacity-0 group-hover/past:opacity-100 transition-opacity"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    ))}
-
-                    {/* Add more drop area */}
-                    <div
-                      className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-lg min-h-[200px] cursor-pointer hover:border-gray-400 transition-colors"
-                      onClick={() => fileInputRefs.current[level]?.click()}
-                    >
-                      <div className="text-xl mb-1 opacity-30">+</div>
-                      <p className="text-[10px] text-gray-400">추가 업로드</p>
-                    </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -247,15 +283,12 @@ export default function CurriculumPage() {
           onClick={() => setZoomedFile(null)}
         >
           <div className="relative max-w-[95vw] max-h-[95vh]" onClick={e => e.stopPropagation()}>
-            {/* Close button */}
             <button
               onClick={() => setZoomedFile(null)}
               className="absolute -top-10 right-0 text-white text-sm font-medium hover:text-gray-300 flex items-center gap-1"
             >
               닫기 ✕
             </button>
-
-            {/* File name */}
             <div className="absolute -top-10 left-0 text-white text-sm font-medium truncate max-w-[60%]">
               {zoomedFile.name}
             </div>

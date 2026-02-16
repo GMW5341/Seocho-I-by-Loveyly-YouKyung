@@ -9,7 +9,7 @@ import Badge from '../common/Badge';
 import PaymentForm from './PaymentForm';
 
 export default function PaymentManager() {
-  const { students, payments, addPayment, updatePayment, attendance, holidays, settings } = useAppStore();
+  const { students, payments, addPayment, updatePayment, deletePayment, attendance, holidays, settings } = useAppStore();
   const [showForm, setShowForm] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | undefined>();
   const [filterView, setFilterView] = useState<'active' | 'all' | 'unpaid'>('active');
@@ -247,12 +247,24 @@ export default function PaymentManager() {
                 <td className="px-4 py-3">
                   <div className="flex gap-2">
                     {data.activePayment ? (
-                      <button
-                        onClick={() => setEditingPayment(data.activePayment)}
-                        className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
-                      >
-                        수정
-                      </button>
+                      <>
+                        <button
+                          onClick={() => setEditingPayment(data.activePayment)}
+                          className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                        >
+                          수정
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`${data.student.name}님의 결제를 취소하시겠습니까?`)) {
+                              deletePayment(data.activePayment!.id);
+                            }
+                          }}
+                          className="text-xs text-red-500 hover:text-red-700 font-medium"
+                        >
+                          취소
+                        </button>
+                      </>
                     ) : (
                       <button
                         onClick={() => {
