@@ -75,7 +75,7 @@ export default function ScheduleGrid() {
 
   // Get specific date for a day-of-week in the current viewed week
   const getDateForDay = useCallback((day: DayOfWeek): string => {
-    const dayMap: Record<DayOfWeek, number> = { '월': 1, '화': 2, '수': 3, '목': 4, '금': 5, '토': 6 };
+    const dayMap: Record<DayOfWeek, number> = { '월': 0, '화': 1, '수': 2, '목': 3, '금': 4, '토': 5 };
     const offset = dayMap[day];
     const date = new Date(currentWeekStart);
     date.setDate(date.getDate() + offset);
