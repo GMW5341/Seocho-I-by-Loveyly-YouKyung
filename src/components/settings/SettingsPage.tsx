@@ -100,8 +100,8 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-6 max-w-3xl">
-      <h3 className="text-lg font-bold text-gray-800 mb-6">설정</h3>
+    <div className="p-3 md:p-6 max-w-3xl">
+      <h3 className="text-lg font-bold text-gray-800 mb-4 md:mb-6">설정</h3>
 
       {/* Logo Upload */}
       <section className="bg-white rounded-xl border border-gray-200 p-5 mb-6">

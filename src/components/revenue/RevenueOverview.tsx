@@ -147,8 +147,8 @@ export default function RevenueOverview() {
   const maxTrend = Math.max(...monthlyTrend.map(m => m.total), 1);
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-3 md:p-6">
+      <div className="flex items-center justify-between mb-4 md:mb-6">
         <div>
           <h3 className="text-lg font-bold text-gray-800">매출 현황</h3>
           <p className="text-sm text-gray-500">학원 전체 매출 통계</p>

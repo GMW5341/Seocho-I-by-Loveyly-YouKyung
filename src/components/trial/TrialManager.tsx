@@ -53,8 +53,8 @@ export default function TrialManager() {
   };
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-3 md:p-6">
+      <div className="flex items-center justify-between mb-4 md:mb-6">
         <div>
           <h3 className="text-lg font-bold text-gray-800">체험 수업 관리</h3>
           <p className="text-sm text-gray-500">체험 수업 신청 학생 목록 및 결제 관리</p>

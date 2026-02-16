@@ -203,8 +203,8 @@ export default function CurriculumPage() {
   };
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
+    <div className="p-3 md:p-6">
+      <div className="mb-4 md:mb-6">
         <h3 className="text-lg font-bold text-gray-800">커리큘럼</h3>
         <p className="text-sm text-gray-500">반별 커리큘럼을 업로드하고 관리하세요. 파일을 드래그하여 업로드하거나, 커리큘럼 간 드래그로 순서를 변경할 수 있습니다.</p>
       </div>

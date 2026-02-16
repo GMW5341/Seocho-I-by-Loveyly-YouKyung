@@ -183,8 +183,8 @@ export default function SpecialClassManager() {
   const totalRevenue = classStudents.filter(s => s.paid).reduce((sum, s) => sum + s.amount, 0);
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-3 md:p-6">
+      <div className="flex items-center justify-between mb-4 md:mb-6">
         <div>
           <h3 className="text-lg font-bold text-gray-800">특강 수업</h3>
           <p className="text-sm text-gray-500">

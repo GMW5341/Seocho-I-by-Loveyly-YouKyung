@@ -80,8 +80,8 @@ export default function PaymentManager() {
   };
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-3 md:p-6">
+      <div className="flex items-center justify-between mb-4 md:mb-6">
         <h3 className="text-lg font-bold text-gray-800">결제 관리</h3>
         <div className="flex gap-2">
           <button

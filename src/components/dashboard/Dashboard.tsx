@@ -128,14 +128,14 @@ export default function Dashboard() {
   }, [activeStudents, payments]);
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
+    <div className="p-3 md:p-6">
+      <div className="mb-4 md:mb-6">
         <h3 className="text-lg font-bold text-gray-800">대시보드</h3>
         <p className="text-sm text-gray-500">{format(new Date(), 'yyyy년 MM월 dd일 EEEE', { locale: ko })}</p>
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 md:gap-3 mb-4 md:mb-6">
         {[
           { label: '총 원생', value: `${metrics.totalStudents}명`, color: 'text-gray-900' },
           { label: '오늘 수업', value: `${metrics.todayClassCount}건`, color: 'text-indigo-600' },

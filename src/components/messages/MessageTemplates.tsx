@@ -72,8 +72,8 @@ export default function MessageTemplates() {
   const sorted = [...filtered].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-3 md:p-6">
+      <div className="flex items-center justify-between mb-4 md:mb-6">
         <div>
           <h3 className="text-lg font-bold text-gray-800">메시지 양식</h3>
           <p className="text-sm text-gray-500">카카오톡 발송용 메시지 양식을 저장하고 관리하세요.</p>

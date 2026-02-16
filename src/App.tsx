@@ -1,3 +1,4 @@
+import { useState, useCallback, useEffect } from 'react';
 import { StoreProvider, useAppStore } from './store/StoreContext';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
@@ -27,8 +28,25 @@ const TAB_TITLES: Record<string, string> = {
   settings: '설정',
 };
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  return isMobile;
+}
+
 function AppContent() {
   const { activeTab, setActiveTab } = useAppStore();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const isMobile = useIsMobile();
+
+  const handleTabChange = useCallback((tab: Parameters<typeof setActiveTab>[0]) => {
+    setActiveTab(tab);
+    if (isMobile) setSidebarOpen(false);
+  }, [setActiveTab, isMobile]);
 
   const renderContent = () => {
     switch (activeTab) {
@@ -48,10 +66,29 @@ function AppContent() {
   };
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+    <div className="flex min-h-screen relative">
+      {/* Mobile overlay */}
+      {isMobile && sidebarOpen && (
+        <div
+          className="sidebar-overlay"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      {isMobile ? (
+        <div className={`sidebar-mobile ${sidebarOpen ? 'sidebar-open' : ''}`}>
+          <Sidebar activeTab={activeTab} onTabChange={handleTabChange} />
+        </div>
+      ) : (
+        <Sidebar activeTab={activeTab} onTabChange={handleTabChange} />
+      )}
+
       <div className="flex-1 flex flex-col min-w-0">
-        <Header title={TAB_TITLES[activeTab] || '서초아이미술'} />
+        <Header
+          title={TAB_TITLES[activeTab] || '서초아이미술'}
+          onMenuToggle={isMobile ? () => setSidebarOpen(prev => !prev) : undefined}
+        />
         <main className="flex-1 bg-gray-50 overflow-auto">
           {renderContent()}
         </main>

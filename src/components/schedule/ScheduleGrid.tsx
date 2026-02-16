@@ -474,8 +474,8 @@ export default function ScheduleGrid() {
   };
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-4">
+    <div className="p-3 md:p-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
         <div>
           <h3 className="text-lg font-bold text-gray-800">주간 스케줄</h3>
           <p className="text-sm text-gray-500">
@@ -485,13 +485,13 @@ export default function ScheduleGrid() {
         <div className="flex gap-2">
           <button
             onClick={() => setShowTrialForm(true)}
-            className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors"
+            className="bg-emerald-600 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-medium hover:bg-emerald-700 transition-colors whitespace-nowrap"
           >
             + 체험 수업
           </button>
           <button
             onClick={() => setShowMakeupForm(true)}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+            className="bg-indigo-600 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-medium hover:bg-indigo-700 transition-colors whitespace-nowrap"
           >
             + 보강 추가
           </button>
