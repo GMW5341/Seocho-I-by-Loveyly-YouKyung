@@ -1,11 +1,13 @@
 import type { TabType } from '../../types';
 
 const tabs: { id: TabType; label: string; icon: string }[] = [
+  { id: 'curriculum', label: '커리큘럼', icon: '📚' },
   { id: 'dashboard', label: '대시보드', icon: '📊' },
   { id: 'schedule', label: '스케줄', icon: '📅' },
   { id: 'students', label: '원생 관리', icon: '👨‍🎨' },
   { id: 'attendance', label: '출결 관리', icon: '✅' },
   { id: 'payments', label: '결제 관리', icon: '💳' },
+  { id: 'trial', label: '체험 수업', icon: '🌟' },
   { id: 'settings', label: '설정', icon: '⚙️' },
 ];
 
@@ -38,7 +40,7 @@ export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
         ))}
       </nav>
       <div className="p-4 border-t border-gray-200 text-xs text-gray-400 text-center">
-        v1.0.0
+        v1.1.0
       </div>
     </aside>
   );

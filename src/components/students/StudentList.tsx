@@ -25,12 +25,12 @@ export default function StudentList() {
 
   const handleAdd = (data: Omit<Student, 'id' | 'createdAt' | 'active'>) => {
     const newStudent = addStudent(data);
-    // Auto-create schedule slots for regular days
-    data.regularDays.forEach(day => {
+    // Auto-create schedule slots for regular schedule
+    (data.regularSchedule || []).forEach(entry => {
       addSchedule({
         studentId: newStudent.id,
-        dayOfWeek: day,
-        startTime: data.regularStartTimes[day] || '14:00',
+        dayOfWeek: entry.day,
+        startTime: entry.startTime,
         duration: data.classDuration,
         isRegular: true,
       });
@@ -101,8 +101,7 @@ export default function StudentList() {
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">나이/학년</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">반</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">수업시간</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">수업요일</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">수업시각</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">수업 스케줄</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">결제상태</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">관리</th>
             </tr>
@@ -120,13 +119,11 @@ export default function StudentList() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">{student.classDuration}분</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{student.regularDays.join(', ')}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">
-                    {student.regularDays.map(day => (
-                      <span key={day}>
-                        {student.regularDays.length > 1 ? `${day} ` : ''}
-                        {student.regularStartTimes[day] || '-'}
-                        {student.regularDays.indexOf(day) < student.regularDays.length - 1 ? ' / ' : ''}
+                    {(student.regularSchedule || []).map((entry, i) => (
+                      <span key={i}>
+                        {entry.day} {entry.startTime}
+                        {i < (student.regularSchedule || []).length - 1 ? ' / ' : ''}
                       </span>
                     ))}
                   </td>
@@ -156,7 +153,7 @@ export default function StudentList() {
             })}
             {filteredStudents.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-sm text-gray-400">
+                <td colSpan={7} className="px-4 py-12 text-center text-sm text-gray-400">
                   등록된 원생이 없습니다.
                 </td>
               </tr>

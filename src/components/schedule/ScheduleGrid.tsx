@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
 import { useAppStore } from '../../store/StoreContext';
-import type { DayOfWeek, ScheduleSlot } from '../../types';
+import type { DayOfWeek, ScheduleSlot, ClassDuration, StudentGrade } from '../../types';
+import { TRIAL_PRICING } from '../../types';
 import {
   DAYS_OF_WEEK,
   getOperatingHours,
@@ -13,12 +14,18 @@ import {
 } from '../../utils/helpers';
 import Modal from '../common/Modal';
 import MakeupForm from './MakeupForm';
+import TrialForm from './TrialForm';
 
 const PX_PER_MINUTE = 2.5;
 
 export default function ScheduleGrid() {
-  const { students, schedules, settings, moveSchedule, removeSchedule, addSchedule } = useAppStore();
+  const {
+    students, schedules, settings, trialStudents,
+    moveSchedule, removeSchedule, addSchedule,
+    addTrialStudent, addTrialLesson,
+  } = useAppStore();
   const [showMakeupForm, setShowMakeupForm] = useState(false);
+  const [showTrialForm, setShowTrialForm] = useState(false);
   const [draggedSlot, setDraggedSlot] = useState<ScheduleSlot | null>(null);
   const [hoveredCell, setHoveredCell] = useState<{ day: DayOfWeek; time: string } | null>(null);
   const dayColumnRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -28,6 +35,10 @@ export default function ScheduleGrid() {
   const getStudentById = useCallback((id: string) => {
     return activeStudents.find(s => s.id === id);
   }, [activeStudents]);
+
+  const getTrialStudentById = useCallback((id: string) => {
+    return trialStudents.find(s => s.id === id);
+  }, [trialStudents]);
 
   // Compute unified time range across all days
   const timeRange = useMemo(() => {
@@ -144,6 +155,41 @@ export default function ScheduleGrid() {
     setShowMakeupForm(false);
   };
 
+  const handleAddTrial = (data: {
+    name: string;
+    grade: StudentGrade;
+    parentPhone: string;
+    memo: string;
+    dayOfWeek: DayOfWeek;
+    startTime: string;
+    duration: ClassDuration;
+  }) => {
+    const trialStudent = addTrialStudent({
+      name: data.name,
+      grade: data.grade,
+      parentPhone: data.parentPhone,
+      memo: data.memo,
+    });
+    addTrialLesson({
+      trialStudentId: trialStudent.id,
+      dayOfWeek: data.dayOfWeek,
+      startTime: data.startTime,
+      duration: data.duration,
+      paid: false,
+      amount: TRIAL_PRICING[data.duration],
+    });
+    addSchedule({
+      studentId: '',
+      dayOfWeek: data.dayOfWeek,
+      startTime: data.startTime,
+      duration: data.duration,
+      isRegular: false,
+      isTrial: true,
+      trialStudentId: trialStudent.id,
+    });
+    setShowTrialForm(false);
+  };
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
@@ -153,16 +199,24 @@ export default function ScheduleGrid() {
             {settings.currentSeason} | 동시간대 최대 {settings.maxStudentsPerSlot}명
           </p>
         </div>
-        <button
-          onClick={() => setShowMakeupForm(true)}
-          className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
-        >
-          + 보강 추가
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowTrialForm(true)}
+            className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors"
+          >
+            + 체험 수업
+          </button>
+          <button
+            onClick={() => setShowMakeupForm(true)}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+          >
+            + 보강 추가
+          </button>
+        </div>
       </div>
 
       {/* Legend */}
-      <div className="flex gap-4 mb-4 text-xs">
+      <div className="flex gap-4 mb-4 text-xs flex-wrap">
         <div className="flex items-center gap-1">
           <div className="w-3 h-3 rounded bg-amber-200 border border-amber-300" /> 60분
         </div>
@@ -174,6 +228,9 @@ export default function ScheduleGrid() {
         </div>
         <div className="flex items-center gap-1 ml-4">
           <div className="w-3 h-3 rounded border-2 border-dashed border-orange-400" /> 보강
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="w-3 h-3 rounded bg-emerald-200 border-2 border-emerald-400" /> 체험
         </div>
       </div>
 
@@ -285,8 +342,12 @@ export default function ScheduleGrid() {
 
                   {/* Schedule blocks */}
                   {daySlots.map(slot => {
-                    const student = getStudentById(slot.studentId);
-                    if (!student) return null;
+                    const isTrial = slot.isTrial;
+                    const student = isTrial ? null : getStudentById(slot.studentId);
+                    const trialStudent = isTrial && slot.trialStudentId ? getTrialStudentById(slot.trialStudentId) : null;
+                    const displayName = isTrial ? (trialStudent?.name || '체험') : (student?.name || '');
+
+                    if (!isTrial && !student) return null;
 
                     const top = (timeToMinutes(slot.startTime) - timeRange.earliest) * PX_PER_MINUTE;
                     const height = slot.duration * PX_PER_MINUTE;
@@ -304,8 +365,11 @@ export default function ScheduleGrid() {
                           absolute z-10 px-1.5 py-1 rounded cursor-grab active:cursor-grabbing
                           border select-none group/card overflow-hidden
                           transition-opacity
-                          ${getDurationColor(slot.duration)}
-                          ${!slot.isRegular ? 'border-dashed border-orange-400 border-2' : ''}
+                          ${isTrial
+                            ? 'bg-emerald-100 border-emerald-400 border-2'
+                            : getDurationColor(slot.duration)
+                          }
+                          ${!slot.isRegular && !isTrial ? 'border-dashed border-orange-400 border-2' : ''}
                           ${draggedSlot?.id === slot.id ? 'opacity-40' : 'opacity-95 hover:opacity-100'}
                         `}
                         style={{
@@ -314,18 +378,22 @@ export default function ScheduleGrid() {
                           left: `calc(${leftPercent}% + 2px)`,
                           width: `calc(${widthPercent}% - 4px)`,
                         }}
-                        title={`${student.name} (${student.level}) - ${slot.duration}분 [${slot.startTime}~${endTime}]`}
+                        title={isTrial
+                          ? `[체험] ${displayName} - ${slot.duration}분 [${slot.startTime}~${endTime}]`
+                          : `${displayName} (${student?.level}) - ${slot.duration}분 [${slot.startTime}~${endTime}]`
+                        }
                       >
-                        <div className="font-semibold text-xs truncate text-gray-800">{student.name}</div>
+                        <div className="font-semibold text-xs truncate text-gray-800">{displayName}</div>
                         <div className="text-[10px] text-gray-500">{slot.startTime}-{endTime}</div>
                         <div className="text-[10px] text-gray-500">{slot.duration}분</div>
-                        {!slot.isRegular && <div className="text-[10px] text-orange-600 font-medium">보강</div>}
+                        {isTrial && <div className="text-[10px] text-emerald-700 font-medium">체험</div>}
+                        {!slot.isRegular && !isTrial && <div className="text-[10px] text-orange-600 font-medium">보강</div>}
 
                         {/* Delete button */}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (confirm(`${student.name} 스케줄을 삭제하시겠습니까?`)) removeSchedule(slot.id);
+                            if (confirm(`${displayName} 스케줄을 삭제하시겠습니까?`)) removeSchedule(slot.id);
                           }}
                           className="absolute top-0 right-0 w-4 h-4 bg-red-500 text-white rounded-full text-[10px] leading-none items-center justify-center hidden group-hover/card:flex"
                         >
@@ -346,6 +414,13 @@ export default function ScheduleGrid() {
           students={activeStudents}
           onSubmit={handleAddMakeup}
           onCancel={() => setShowMakeupForm(false)}
+        />
+      </Modal>
+
+      <Modal isOpen={showTrialForm} onClose={() => setShowTrialForm(false)} title="체험 수업 추가">
+        <TrialForm
+          onSubmit={handleAddTrial}
+          onCancel={() => setShowTrialForm(false)}
         />
       </Modal>
     </div>

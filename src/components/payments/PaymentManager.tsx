@@ -36,7 +36,7 @@ export default function PaymentManager() {
         nextPaymentDate = calculateNextPaymentDate(
           activePayment.startDate,
           activePayment.totalSessions,
-          student.regularDays,
+          student.regularSchedule || [],
           holidayDates,
           studentAttendance
         );

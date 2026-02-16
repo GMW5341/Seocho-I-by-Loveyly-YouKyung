@@ -97,10 +97,11 @@ export function getPricePerSession(basePricePer4: number, sessions: number): num
 export function calculateNextPaymentDate(
   lastPaymentDate: string,
   totalSessions: number,
-  regularDays: DayOfWeek[],
+  regularSchedule: { day: DayOfWeek; startTime: string }[],
   holidays: string[],
   attendanceRecords: { date: string; status: string }[]
 ): string | null {
+  const regularDays = regularSchedule.map(entry => entry.day);
   if (regularDays.length === 0) return null;
 
   let sessionsCount = 0;

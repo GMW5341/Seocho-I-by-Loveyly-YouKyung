@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type {
   Student, ScheduleSlot, AttendanceRecord, Payment, Holiday,
-  AcademySettings, TabType
+  AcademySettings, TabType, TrialStudent, TrialLesson, CurriculumFile
 } from '../types';
 import { DEFAULT_SETTINGS } from '../utils/helpers';
 
@@ -13,6 +13,9 @@ const STORAGE_KEYS = {
   payments: 'seocho_payments',
   holidays: 'seocho_holidays',
   settings: 'seocho_settings',
+  trialStudents: 'seocho_trial_students',
+  trialLessons: 'seocho_trial_lessons',
+  curriculum: 'seocho_curriculum',
 };
 
 function loadFromStorage<T>(key: string, fallback: T): T {
@@ -31,20 +34,30 @@ function saveToStorage<T>(key: string, data: T): void {
 export function useStore() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [students, setStudents] = useState<Student[]>(() => {
-    const loaded = loadFromStorage<(Student & { regularStartTime?: string })[]>(STORAGE_KEYS.students, []);
-    // 기존 regularStartTime → regularStartTimes 마이그레이션
+    const loaded = loadFromStorage<Record<string, unknown>[]>(STORAGE_KEYS.students, []);
     return loaded.map(s => {
-      if (!s.regularStartTimes && (s as { regularStartTime?: string }).regularStartTime) {
-        const oldTime = (s as { regularStartTime?: string }).regularStartTime!;
-        const times: { [key: string]: string } = {};
-        (s.regularDays || []).forEach(day => { times[day] = oldTime; });
-        const { regularStartTime: _, ...rest } = s as Student & { regularStartTime?: string };
-        return { ...rest, regularStartTimes: times } as Student;
+      const student = s as unknown as Student & { regularStartTime?: string };
+      // regularSchedule이 이미 있으면 그대로 사용
+      if (student.regularSchedule && Array.isArray(student.regularSchedule) && student.regularSchedule.length > 0) {
+        return student as Student;
       }
-      if (!s.regularStartTimes) {
-        return { ...s, regularStartTimes: {} } as Student;
+      // regularStartTimes에서 마이그레이션
+      if (student.regularStartTimes && student.regularDays) {
+        const schedule = student.regularDays.map(day => ({
+          day,
+          startTime: student.regularStartTimes![day] || '14:00',
+        }));
+        return { ...student, regularSchedule: schedule } as Student;
       }
-      return s as Student;
+      // regularStartTime (단일)에서 마이그레이션
+      if (student.regularStartTime && student.regularDays) {
+        const schedule = student.regularDays.map(day => ({
+          day,
+          startTime: student.regularStartTime!,
+        }));
+        return { ...student, regularSchedule: schedule } as Student;
+      }
+      return { ...student, regularSchedule: [] } as Student;
     });
   });
   const [schedules, setSchedules] = useState<ScheduleSlot[]>(() => loadFromStorage(STORAGE_KEYS.schedules, []));
@@ -52,6 +65,9 @@ export function useStore() {
   const [payments, setPayments] = useState<Payment[]>(() => loadFromStorage(STORAGE_KEYS.payments, []));
   const [holidays, setHolidays] = useState<Holiday[]>(() => loadFromStorage(STORAGE_KEYS.holidays, []));
   const [settings, setSettings] = useState<AcademySettings>(() => loadFromStorage(STORAGE_KEYS.settings, DEFAULT_SETTINGS));
+  const [trialStudents, setTrialStudents] = useState<TrialStudent[]>(() => loadFromStorage(STORAGE_KEYS.trialStudents, []));
+  const [trialLessons, setTrialLessons] = useState<TrialLesson[]>(() => loadFromStorage(STORAGE_KEYS.trialLessons, []));
+  const [curriculum, setCurriculum] = useState<CurriculumFile[]>(() => loadFromStorage(STORAGE_KEYS.curriculum, []));
 
   // Persist to localStorage on changes
   useEffect(() => { saveToStorage(STORAGE_KEYS.students, students); }, [students]);
@@ -60,6 +76,9 @@ export function useStore() {
   useEffect(() => { saveToStorage(STORAGE_KEYS.payments, payments); }, [payments]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.holidays, holidays); }, [holidays]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.settings, settings); }, [settings]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.trialStudents, trialStudents); }, [trialStudents]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.trialLessons, trialLessons); }, [trialLessons]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.curriculum, curriculum); }, [curriculum]);
 
   // Student CRUD
   const addStudent = useCallback((student: Omit<Student, 'id' | 'createdAt' | 'active'>) => {
@@ -172,6 +191,52 @@ export function useStore() {
     setSettings(prev => ({ ...prev, ...updates }));
   }, []);
 
+  // Trial Student CRUD
+  const addTrialStudent = useCallback((data: Omit<TrialStudent, 'id' | 'createdAt'>) => {
+    const newTrialStudent: TrialStudent = {
+      ...data,
+      id: uuidv4(),
+      createdAt: new Date().toISOString(),
+    };
+    setTrialStudents(prev => [...prev, newTrialStudent]);
+    return newTrialStudent;
+  }, []);
+
+  const updateTrialStudent = useCallback((id: string, updates: Partial<TrialStudent>) => {
+    setTrialStudents(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+  }, []);
+
+  const deleteTrialStudent = useCallback((id: string) => {
+    setTrialStudents(prev => prev.filter(s => s.id !== id));
+    setTrialLessons(prev => prev.filter(l => l.trialStudentId !== id));
+  }, []);
+
+  // Trial Lesson CRUD
+  const addTrialLesson = useCallback((data: Omit<TrialLesson, 'id'>) => {
+    const newLesson: TrialLesson = { ...data, id: uuidv4() };
+    setTrialLessons(prev => [...prev, newLesson]);
+    return newLesson;
+  }, []);
+
+  const updateTrialLesson = useCallback((id: string, updates: Partial<TrialLesson>) => {
+    setTrialLessons(prev => prev.map(l => l.id === id ? { ...l, ...updates } : l));
+  }, []);
+
+  const deleteTrialLesson = useCallback((id: string) => {
+    setTrialLessons(prev => prev.filter(l => l.id !== id));
+  }, []);
+
+  // Curriculum CRUD
+  const addCurriculumFile = useCallback((data: Omit<CurriculumFile, 'id' | 'createdAt'>) => {
+    const newFile: CurriculumFile = { ...data, id: uuidv4(), createdAt: new Date().toISOString() };
+    setCurriculum(prev => [...prev, newFile]);
+    return newFile;
+  }, []);
+
+  const deleteCurriculumFile = useCallback((id: string) => {
+    setCurriculum(prev => prev.filter(f => f.id !== id));
+  }, []);
+
   // Helper: get student's active payment
   const getActivePayment = useCallback((studentId: string): Payment | undefined => {
     return payments.find(p => p.studentId === studentId && !p.completed && p.remainingSessions > 0);
@@ -192,6 +257,9 @@ export function useStore() {
     payments, addPayment, updatePayment, deletePayment,
     holidays, addHoliday, removeHoliday,
     settings, updateSettings,
+    trialStudents, addTrialStudent, updateTrialStudent, deleteTrialStudent,
+    trialLessons, addTrialLesson, updateTrialLesson, deleteTrialLesson,
+    curriculum, addCurriculumFile, deleteCurriculumFile,
     getActivePayment, getAttendanceByDateRange,
   };
 }

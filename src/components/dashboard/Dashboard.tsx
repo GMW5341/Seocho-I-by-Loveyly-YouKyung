@@ -241,7 +241,7 @@ export default function Dashboard() {
                 <div>
                   <div className="text-sm font-medium text-gray-800">{item.student.name}</div>
                   <div className="text-xs text-gray-500">
-                    {item.student.level} | {item.student.regularDays.map(d => `${d} ${item.student.regularStartTimes[d] || ''}`).join(', ')}
+                    {item.student.level} | {(item.student.regularSchedule || []).map(entry => `${entry.day} ${entry.startTime}`).join(', ')}
                   </div>
                 </div>
                 <Badge variant="warning">보강 {item.pending}회</Badge>

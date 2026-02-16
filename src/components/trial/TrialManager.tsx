@@ -1,0 +1,214 @@
+import { useState, useMemo } from 'react';
+import { format } from 'date-fns';
+import { ko } from 'date-fns/locale';
+import { useAppStore } from '../../store/StoreContext';
+import type { PaymentMethod, ClassDuration } from '../../types';
+import { TRIAL_PRICING } from '../../types';
+import { formatCurrency } from '../../utils/helpers';
+import Badge from '../common/Badge';
+import Modal from '../common/Modal';
+
+const PAYMENT_METHODS: PaymentMethod[] = ['계좌이체', '현금', '카드', '온누리상품권', '기타'];
+
+export default function TrialManager() {
+  const { trialStudents, trialLessons, updateTrialLesson, deleteTrialStudent } = useAppStore();
+  const [payingLessonId, setPayingLessonId] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('계좌이체');
+
+  const trialData = useMemo(() => {
+    return trialStudents.map(student => {
+      const lessons = trialLessons.filter(l => l.trialStudentId === student.id);
+      return { student, lessons };
+    }).sort((a, b) => b.student.createdAt.localeCompare(a.student.createdAt));
+  }, [trialStudents, trialLessons]);
+
+  const stats = useMemo(() => {
+    const total = trialLessons.length;
+    const paid = trialLessons.filter(l => l.paid).length;
+    const unpaid = total - paid;
+    const revenue = trialLessons.filter(l => l.paid).reduce((sum, l) => sum + l.amount, 0);
+    return { total, paid, unpaid, revenue };
+  }, [trialLessons]);
+
+  const handlePayment = (lessonId: string) => {
+    updateTrialLesson(lessonId, {
+      paid: true,
+      paidAt: new Date().toISOString(),
+      paymentMethod,
+    });
+    setPayingLessonId(null);
+  };
+
+  return (
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h3 className="text-lg font-bold text-gray-800">체험 수업 관리</h3>
+          <p className="text-sm text-gray-500">체험 수업 신청 학생 목록 및 결제 관리</p>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h4 className="text-sm font-medium text-gray-500 mb-1">총 체험 학생</h4>
+          <div className="text-xl font-bold text-gray-900">{trialStudents.length}명</div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h4 className="text-sm font-medium text-gray-500 mb-1">총 체험 수업</h4>
+          <div className="text-xl font-bold text-gray-900">{stats.total}건</div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h4 className="text-sm font-medium text-gray-500 mb-1">미결제</h4>
+          <div className="text-xl font-bold text-red-600">{stats.unpaid}건</div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h4 className="text-sm font-medium text-gray-500 mb-1">체험 수업 매출</h4>
+          <div className="text-xl font-bold text-emerald-600">{formatCurrency(stats.revenue)}</div>
+        </div>
+      </div>
+
+      {/* Price info */}
+      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-6">
+        <h4 className="text-sm font-medium text-emerald-700 mb-2">체험 수업 가격표</h4>
+        <div className="flex gap-6 text-sm">
+          {([60, 80, 100] as ClassDuration[]).map(d => (
+            <span key={d} className="text-emerald-800">
+              {d}분: <span className="font-bold">{formatCurrency(TRIAL_PRICING[d])}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Trial Student Table */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-auto">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-200">
+              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">이름</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">나이/학년</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">학부모 연락처</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">수업 정보</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">금액</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">결제 상태</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">등록일</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">관리</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {trialData.map(({ student, lessons }) => (
+              <tr key={student.id} className="hover:bg-gray-50">
+                <td className="px-4 py-3">
+                  <div className="text-sm font-medium text-gray-900">{student.name}</div>
+                  {student.memo && <div className="text-xs text-gray-400">{student.memo}</div>}
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-600">{student.grade}</td>
+                <td className="px-4 py-3 text-sm text-gray-600">{student.parentPhone || '-'}</td>
+                <td className="px-4 py-3 text-sm text-gray-600">
+                  {lessons.map(l => (
+                    <div key={l.id}>{l.dayOfWeek} {l.startTime} ({l.duration}분)</div>
+                  ))}
+                </td>
+                <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                  {lessons.map(l => (
+                    <div key={l.id}>{formatCurrency(l.amount)}</div>
+                  ))}
+                </td>
+                <td className="px-4 py-3">
+                  {lessons.map(l => (
+                    <div key={l.id} className="mb-1">
+                      {l.paid ? (
+                        <Badge variant="success">
+                          결제완료 ({l.paymentMethod})
+                        </Badge>
+                      ) : (
+                        <button
+                          onClick={() => setPayingLessonId(l.id)}
+                          className="text-xs bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded-full font-medium hover:bg-red-100"
+                        >
+                          미결제 - 결제하기
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-500">
+                  {format(new Date(student.createdAt), 'MM/dd', { locale: ko })}
+                </td>
+                <td className="px-4 py-3">
+                  <button
+                    onClick={() => {
+                      if (confirm(`${student.name} 체험 기록을 삭제하시겠습니까?`)) deleteTrialStudent(student.id);
+                    }}
+                    className="text-xs text-red-600 hover:text-red-800 font-medium"
+                  >
+                    삭제
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {trialData.length === 0 && (
+              <tr>
+                <td colSpan={8} className="px-4 py-12 text-center text-sm text-gray-400">
+                  체험 수업 기록이 없습니다. 스케줄 관리에서 체험 수업을 추가하세요.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Payment Modal */}
+      <Modal isOpen={!!payingLessonId} onClose={() => setPayingLessonId(null)} title="체험 수업 결제">
+        <div className="space-y-4">
+          {payingLessonId && (() => {
+            const lesson = trialLessons.find(l => l.id === payingLessonId);
+            const student = lesson ? trialStudents.find(s => s.id === lesson.trialStudentId) : null;
+            if (!lesson || !student) return null;
+            return (
+              <>
+                <div className="bg-gray-50 rounded-lg p-3 text-sm">
+                  <div className="font-medium text-gray-900">{student.name} ({student.grade})</div>
+                  <div className="text-gray-600">{lesson.dayOfWeek} {lesson.startTime} | {lesson.duration}분</div>
+                  <div className="text-lg font-bold text-gray-900 mt-1">{formatCurrency(lesson.amount)}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">결제 방식</label>
+                  <div className="flex flex-wrap gap-2">
+                    {PAYMENT_METHODS.map(m => (
+                      <button
+                        key={m}
+                        onClick={() => setPaymentMethod(m)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${
+                          paymentMethod === m
+                            ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => handlePayment(payingLessonId)}
+                    className="flex-1 bg-emerald-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-emerald-700"
+                  >
+                    결제 완료
+                  </button>
+                  <button
+                    onClick={() => setPayingLessonId(null)}
+                    className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-200"
+                  >
+                    취소
+                  </button>
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      </Modal>
+    </div>
+  );
+}

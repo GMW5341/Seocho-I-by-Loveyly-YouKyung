@@ -12,15 +12,22 @@ export type AttendanceStatus = '출석' | '결석' | '보강' | '예정';
 
 export type SeasonType = '학기중' | '방학중';
 
+export interface RegularScheduleEntry {
+  day: DayOfWeek;
+  startTime: string; // "HH:mm"
+}
+
 export interface Student {
   id: string;
   name: string;
   grade: StudentGrade;
   level: ClassLevel;
   classDuration: ClassDuration;
-  sessionsPerWeek: number; // 주 1회 or 2회
-  regularDays: DayOfWeek[];
-  regularStartTimes: { [key in DayOfWeek]?: string }; // 요일별 "HH:mm"
+  sessionsPerWeek: number; // 주 1~5회
+  regularSchedule: RegularScheduleEntry[];
+  // 하위 호환용 (마이그레이션 후 사용하지 않음)
+  regularDays?: DayOfWeek[];
+  regularStartTimes?: { [key in DayOfWeek]?: string };
   phone: string;
   parentPhone: string;
   memo: string;
@@ -35,6 +42,8 @@ export interface ScheduleSlot {
   startTime: string; // "HH:mm"
   duration: ClassDuration;
   isRegular: boolean; // 정규 vs 보강
+  isTrial?: boolean; // 체험 수업 여부
+  trialStudentId?: string; // 체험 수업 학생 ID
   date?: string; // ISO date for specific date slots (보강)
 }
 
@@ -73,6 +82,42 @@ export interface Holiday {
   name: string;
 }
 
+export interface TrialStudent {
+  id: string;
+  name: string;
+  grade: StudentGrade;
+  parentPhone: string;
+  memo: string;
+  createdAt: string;
+}
+
+export interface TrialLesson {
+  id: string;
+  trialStudentId: string;
+  dayOfWeek: DayOfWeek;
+  startTime: string; // "HH:mm"
+  duration: ClassDuration;
+  date?: string; // ISO date
+  paid: boolean;
+  amount: number;
+  paidAt?: string;
+  paymentMethod?: PaymentMethod;
+}
+
+export const TRIAL_PRICING: { [key in ClassDuration]: number } = {
+  60: 35000,
+  80: 40000,
+  100: 45000,
+};
+
+export interface CurriculumFile {
+  id: string;
+  name: string;
+  type: 'image' | 'pdf';
+  dataUrl: string; // base64 data URL
+  createdAt: string;
+}
+
 export interface AcademySettings {
   name: string;
   maxStudentsPerSlot: number;
@@ -95,4 +140,4 @@ export interface DailyScheduleView {
   maxCapacity: number;
 }
 
-export type TabType = 'dashboard' | 'schedule' | 'students' | 'attendance' | 'payments' | 'settings';
+export type TabType = 'curriculum' | 'dashboard' | 'schedule' | 'students' | 'attendance' | 'payments' | 'trial' | 'settings';

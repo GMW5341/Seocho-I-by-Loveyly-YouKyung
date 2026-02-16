@@ -38,7 +38,7 @@ export default function AttendanceManager() {
   const isScheduledDay = (studentId: string, dayOfWeek: DayOfWeek | null) => {
     if (!dayOfWeek) return false;
     const student = activeStudents.find(s => s.id === studentId);
-    return student?.regularDays.includes(dayOfWeek) || false;
+    return (student?.regularSchedule || []).some(entry => entry.day === dayOfWeek);
   };
 
   // Toggle attendance status
@@ -58,7 +58,7 @@ export default function AttendanceManager() {
         studentId,
         date,
         status,
-        startTime: student.regularStartTimes[getDayOfWeekFromDate(date) as DayOfWeek] || Object.values(student.regularStartTimes)[0] || '14:00',
+        startTime: (student.regularSchedule || []).find(entry => entry.day === getDayOfWeekFromDate(date))?.startTime || (student.regularSchedule || [])[0]?.startTime || '14:00',
         duration: student.classDuration,
         isMakeup: status === '보강',
         memo: '',
