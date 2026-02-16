@@ -98,11 +98,11 @@ export default function SettingsPage() {
     URL.revokeObjectURL(url);
   };
 
-  const handleImportData = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = async (event) => {
+    reader.onload = (event) => {
       try {
         const data = JSON.parse(event.target?.result as string);
         // Support both old format (short keys) and new format (full keys)
@@ -130,11 +130,8 @@ export default function SettingsPage() {
           }
         });
         if (imported) {
-          // If sync is enabled, push imported data to cloud first
-          // This prevents cloud from overwriting the import on reload
-          if (checkSyncEnabled()) {
-            await pushToCloud();
-          }
+          // Set flag so sync listener knows to push (not pull) on next load
+          localStorage.setItem('seocho_just_imported', 'true');
           window.location.reload();
         } else {
           alert('백업 파일에 복원할 데이터가 없습니다.');

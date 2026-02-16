@@ -128,6 +128,15 @@ export function startRealtimeSync(onDataReceived?: () => void): boolean {
   const docRef = doc(db, 'academies', room);
   unsubscribe = onSnapshot(docRef, (snapshot) => {
     initialSnapshotReceived = true;
+
+    // If data was just imported via JSON, push local data to cloud instead of pulling
+    const justImported = localStorage.getItem('seocho_just_imported');
+    if (justImported) {
+      localStorage.removeItem('seocho_just_imported');
+      pushToCloud();
+      return;
+    }
+
     if (!snapshot.exists()) {
       // No cloud doc at all - push local data
       pushToCloud();
