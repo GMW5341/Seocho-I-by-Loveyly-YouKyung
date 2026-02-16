@@ -20,6 +20,7 @@ const STORAGE_KEYS = {
   messageTemplates: 'seocho_message_templates',
   specialClasses: 'seocho_special_classes',
   specialClassStudents: 'seocho_special_class_students',
+  logoDataUrl: 'seocho_logo',
 };
 
 function loadFromStorage<T>(key: string, fallback: T): T {
@@ -75,6 +76,7 @@ export function useStore() {
   const [messageTemplates, setMessageTemplates] = useState<MessageTemplate[]>(() => loadFromStorage(STORAGE_KEYS.messageTemplates, []));
   const [specialClasses, setSpecialClasses] = useState<SpecialClass[]>(() => loadFromStorage(STORAGE_KEYS.specialClasses, []));
   const [specialClassStudents, setSpecialClassStudents] = useState<SpecialClassStudent[]>(() => loadFromStorage(STORAGE_KEYS.specialClassStudents, []));
+  const [logoDataUrl, setLogoDataUrl] = useState<string>(() => loadFromStorage(STORAGE_KEYS.logoDataUrl, ''));
 
   // Persist to localStorage on changes
   useEffect(() => { saveToStorage(STORAGE_KEYS.students, students); }, [students]);
@@ -89,6 +91,7 @@ export function useStore() {
   useEffect(() => { saveToStorage(STORAGE_KEYS.messageTemplates, messageTemplates); }, [messageTemplates]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.specialClasses, specialClasses); }, [specialClasses]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.specialClassStudents, specialClassStudents); }, [specialClassStudents]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.logoDataUrl, logoDataUrl); }, [logoDataUrl]);
 
   // Student CRUD
   const addStudent = useCallback((student: Omit<Student, 'id' | 'createdAt' | 'active'>) => {
@@ -411,6 +414,7 @@ export function useStore() {
     messageTemplates, addMessageTemplate, updateMessageTemplate, deleteMessageTemplate,
     specialClasses, addSpecialClass, updateSpecialClass, deleteSpecialClass,
     specialClassStudents, addSpecialClassStudent, updateSpecialClassStudent, deleteSpecialClassStudent,
+    logoDataUrl, setLogoDataUrl,
     getActivePayment, getAttendanceByDateRange,
   };
 }

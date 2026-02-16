@@ -5,7 +5,7 @@ import type { SeasonType, DayOfWeek, ClassDuration } from '../../types';
 import { DAYS_OF_WEEK, formatCurrency } from '../../utils/helpers';
 
 export default function SettingsPage() {
-  const { settings, updateSettings, holidays, addHoliday, removeHoliday } = useAppStore();
+  const { settings, updateSettings, holidays, addHoliday, removeHoliday, logoDataUrl, setLogoDataUrl } = useAppStore();
   const [newHolidayDate, setNewHolidayDate] = useState('');
   const [newHolidayName, setNewHolidayName] = useState('');
 
@@ -92,6 +92,59 @@ export default function SettingsPage() {
   return (
     <div className="p-6 max-w-3xl">
       <h3 className="text-lg font-bold text-gray-800 mb-6">설정</h3>
+
+      {/* Logo Upload */}
+      <section className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+        <h4 className="text-sm font-semibold text-gray-700 mb-3">로고 이미지</h4>
+        <div className="flex items-center gap-4">
+          {logoDataUrl ? (
+            <img src={logoDataUrl} alt="로고" className="w-16 h-16 rounded-full object-cover border-2 border-indigo-200" />
+          ) : (
+            <div className="w-16 h-16 rounded-full bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 text-xs">없음</div>
+          )}
+          <div className="flex flex-col gap-2">
+            <label className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 cursor-pointer inline-block text-center">
+              이미지 업로드
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = (ev) => {
+                    const img = new Image();
+                    img.onload = () => {
+                      const canvas = document.createElement('canvas');
+                      const maxSize = 200;
+                      canvas.width = maxSize;
+                      canvas.height = maxSize;
+                      const ctx = canvas.getContext('2d')!;
+                      const size = Math.min(img.width, img.height);
+                      const sx = (img.width - size) / 2;
+                      const sy = (img.height - size) / 2;
+                      ctx.drawImage(img, sx, sy, size, size, 0, 0, maxSize, maxSize);
+                      setLogoDataUrl(canvas.toDataURL('image/png', 0.9));
+                    };
+                    img.src = ev.target?.result as string;
+                  };
+                  reader.readAsDataURL(file);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+            {logoDataUrl && (
+              <button
+                onClick={() => setLogoDataUrl('')}
+                className="text-xs text-red-500 hover:text-red-700 font-medium"
+              >
+                로고 삭제
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
 
       {/* Season Toggle */}
       <section className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
