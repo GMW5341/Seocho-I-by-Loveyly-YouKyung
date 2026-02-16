@@ -32,11 +32,8 @@ export default function AttendanceManager() {
   const weekDays = eachDayOfInterval({ start: currentWeekStart, end: weekEnd })
     .filter(d => d.getDay() >= 2 && d.getDay() <= 6); // 화~토
 
-  const isCurrentWeek = startOfWeek(new Date(), { weekStartsOn: 1 }).getTime() === currentWeekStart.getTime();
-
   const goToPrevWeek = () => setCurrentWeekStart(prev => subWeeks(prev, 1));
   const goToNextWeek = () => setCurrentWeekStart(prev => addWeeks(prev, 1));
-  const goToThisWeek = () => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }));
 
   // Close calendar on outside click
   useEffect(() => {
@@ -90,13 +87,8 @@ export default function AttendanceManager() {
   // Student attendance summary
   const getStudentSummary = (studentId: string) => {
     const activePayment = payments.find(p => p.studentId === studentId && !p.completed);
-    const totalPresent = attendance.filter(r => r.studentId === studentId && (r.status === '출석' || r.status === '보강')).length;
-    const totalAbsent = attendance.filter(r => r.studentId === studentId && r.status === '결석').length;
-
     return {
       activePayment,
-      totalPresent,
-      totalAbsent,
       remaining: activePayment ? activePayment.remainingSessions : 0,
     };
   };
@@ -110,21 +102,10 @@ export default function AttendanceManager() {
     const monthStart = startOfMonth(calendarMonth);
     const monthEnd = endOfMonth(calendarMonth);
     const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
-    const startDayOfWeek = getDay(monthStart); // 0=Sun
+    const startDayOfWeek = getDay(monthStart);
     const paddingDays: (Date | null)[] = Array(startDayOfWeek).fill(null);
     return [...paddingDays, ...days];
   }, [calendarMonth]);
-
-  // Week offset label
-  const getWeekLabel = () => {
-    if (isCurrentWeek) return null;
-    const now = startOfWeek(new Date(), { weekStartsOn: 1 });
-    const diff = Math.round((currentWeekStart.getTime() - now.getTime()) / (7 * 24 * 60 * 60 * 1000));
-    if (diff === -1) return '지난주';
-    if (diff === 1) return '다음주';
-    if (diff < 0) return `${Math.abs(diff)}주 전`;
-    return `${diff}주 후`;
-  };
 
   return (
     <div className="p-6">
@@ -132,19 +113,9 @@ export default function AttendanceManager() {
         <h3 className="text-lg font-bold text-gray-800">출결 관리</h3>
       </div>
 
-      {/* Week Navigation */}
+      {/* Week Navigation - date range only + calendar */}
       <div className="flex items-center gap-3 mb-4 relative">
         <button onClick={goToPrevWeek} className="px-3 py-1 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">&lsaquo;</button>
-        {isCurrentWeek ? (
-          <span className="px-3 py-1 bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-sm font-medium">
-            이번주
-          </span>
-        ) : (
-          <button onClick={goToThisWeek} className="px-3 py-1 bg-gray-100 text-gray-600 border border-gray-200 rounded-lg text-sm font-medium hover:bg-indigo-50 hover:text-indigo-600">
-            이번주로
-          </button>
-        )}
-        <button onClick={goToNextWeek} className="px-3 py-1 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">&rsaquo;</button>
 
         {/* Clickable date range → opens calendar */}
         <div className="relative" ref={calendarRef}>
@@ -153,12 +124,9 @@ export default function AttendanceManager() {
               setCalendarMonth(currentWeekStart);
               setShowCalendar(!showCalendar);
             }}
-            className="text-sm font-medium text-gray-700 hover:text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded transition-colors cursor-pointer"
+            className="text-sm font-semibold text-gray-800 hover:text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded transition-colors cursor-pointer"
           >
             {format(currentWeekStart, 'yyyy년 M월 d일', { locale: ko })} ~ {format(weekEnd, 'M월 d일', { locale: ko })}
-            {!isCurrentWeek && (
-              <span className="ml-2 text-xs text-indigo-500 font-normal">({getWeekLabel()})</span>
-            )}
           </button>
 
           {/* Calendar Popup */}
@@ -226,6 +194,8 @@ export default function AttendanceManager() {
             </div>
           )}
         </div>
+
+        <button onClick={goToNextWeek} className="px-3 py-1 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">&rsaquo;</button>
       </div>
 
       {/* Student filter */}
@@ -313,9 +283,8 @@ export default function AttendanceManager() {
                               const record = getRecord(student.id, dateStr, entry.startTime);
                               return (
                                 <div key={entry.startTime}>
-                                  {scheduledTimes.length > 1 && (
-                                    <div className="text-[9px] text-gray-400 mb-0.5">{entry.startTime}</div>
-                                  )}
+                                  {/* Always show time for all students */}
+                                  <div className="text-[9px] text-gray-400 mb-0.5">{entry.startTime}</div>
                                   <div className="flex gap-1 justify-center">
                                     {STATUS_OPTIONS.map(opt => (
                                       <button
@@ -366,7 +335,7 @@ export default function AttendanceManager() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <h4 className="text-sm font-medium text-gray-500 mb-2">
-            {isCurrentWeek ? '이번주' : format(currentWeekStart, 'M/d', { locale: ko }) + '주'} 출석률
+            {format(currentWeekStart, 'M/d', { locale: ko })}주 출석률
           </h4>
           {(() => {
             const weekDateStrs = weekDays.map(d => format(d, 'yyyy-MM-dd'));

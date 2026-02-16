@@ -30,7 +30,7 @@ const STATUS_COLORS: Record<AttendanceStatus, string> = {
 export default function ScheduleGrid() {
   const {
     students, schedules, settings, trialStudents, attendance, payments,
-    moveSchedule, removeSchedule, addSchedule,
+    moveSchedule, removeSchedule, restoreSchedule, addSchedule,
     addTrialStudent, addTrialLesson,
     addAttendance, updateAttendance, deleteAttendance,
   } = useAppStore();
@@ -39,7 +39,10 @@ export default function ScheduleGrid() {
   const [draggedSlot, setDraggedSlot] = useState<ScheduleSlot | null>(null);
   const [hoveredCell, setHoveredCell] = useState<{ day: DayOfWeek; time: string } | null>(null);
   const [memoSlot, setMemoSlot] = useState<{ slotId: string; studentId: string; date: string; startTime: string; memo: string } | null>(null);
+  const [deletedSlot, setDeletedSlot] = useState<ScheduleSlot | null>(null);
   const dayColumnRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const dragOffsetRef = useRef(0);
+  const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Week navigation
   const [currentWeekStart, setCurrentWeekStart] = useState(() =>
@@ -48,20 +51,6 @@ export default function ScheduleGrid() {
   const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
   const goToPrevWeek = () => setCurrentWeekStart(prev => subWeeks(prev, 1));
   const goToNextWeek = () => setCurrentWeekStart(prev => addWeeks(prev, 1));
-  const goToThisWeek = () => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }));
-
-  const isCurrentWeek = startOfWeek(new Date(), { weekStartsOn: 1 }).getTime() === currentWeekStart.getTime();
-
-  // Week offset label
-  const getWeekLabel = () => {
-    if (isCurrentWeek) return null;
-    const now = startOfWeek(new Date(), { weekStartsOn: 1 });
-    const diff = Math.round((currentWeekStart.getTime() - now.getTime()) / (7 * 24 * 60 * 60 * 1000));
-    if (diff === -1) return '지난주';
-    if (diff === 1) return '다음주';
-    if (diff < 0) return `${Math.abs(diff)}주 전`;
-    return `${diff}주 후`;
-  };
 
   // Get specific date for a day-of-week in the current viewed week
   const getDateForDay = useCallback((day: DayOfWeek): string => {
@@ -149,11 +138,10 @@ export default function ScheduleGrid() {
     return markers;
   }, [timeRange]);
 
-  // Filter schedules: regular shown only if student has active payment (or no payment history), non-regular by date
+  // Filter schedules
   const filteredSchedules = useMemo(() => {
     return schedules.filter(s => {
       if (s.isRegular) {
-        // Check if student has payment history
         const studentPayments = payments.filter(p => p.studentId === s.studentId);
         if (studentPayments.length > 0) {
           const hasActive = studentPayments.some(p => !p.completed && p.remainingSessions > 0);
@@ -161,11 +149,10 @@ export default function ScheduleGrid() {
         }
         return true;
       }
-      // Non-regular: if it has a date, check if it's in current week
       if (s.date) {
         return s.date >= format(currentWeekStart, 'yyyy-MM-dd') && s.date <= format(weekEnd, 'yyyy-MM-dd');
       }
-      return true; // Legacy non-regular without date
+      return true;
     });
   }, [schedules, currentWeekStart, weekEnd, payments]);
 
@@ -187,28 +174,31 @@ export default function ScheduleGrid() {
   const isDropValid = useCallback((day: DayOfWeek, time: string, slot: ScheduleSlot): boolean => {
     const hours = getOperatingHours(settings, day);
     if (!hours) return false;
-
     const startMin = timeToMinutes(time);
     const endMin = startMin + slot.duration;
     if (startMin < timeToMinutes(hours.start) || endMin > timeToMinutes(hours.end)) return false;
-
     const existingSlots = schedules.filter(s => {
       if (s.id === slot.id) return false;
       if (s.dayOfWeek !== day) return false;
       return isTimeOverlapping(s.startTime, s.duration, time, slot.duration);
     });
-
     return existingSlots.length < settings.maxStudentsPerSlot;
   }, [settings, schedules]);
 
-  // Drag handlers
-  const handleDragStart = (slot: ScheduleSlot) => setDraggedSlot(slot);
+  // Drag handlers - store the offset from block top where user grabbed
+  const handleDragStart = (slot: ScheduleSlot, e: React.DragEvent) => {
+    const target = e.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    dragOffsetRef.current = e.clientY - rect.top;
+    setDraggedSlot(slot);
+  };
 
   const computeTimeFromY = (e: React.DragEvent, day: DayOfWeek): string | null => {
     const col = dayColumnRefs.current[day];
     if (!col) return null;
     const rect = col.getBoundingClientRect();
-    const y = e.clientY - rect.top;
+    // Subtract dragOffset so block top aligns with the grab point
+    const y = e.clientY - rect.top - dragOffsetRef.current;
     const rawMinutes = Math.floor(y / PX_PER_MINUTE) + timeRange.earliest;
     const snapped = Math.round(rawMinutes / 10) * 10;
     const clamped = Math.max(timeRange.earliest, Math.min(snapped, timeRange.latest));
@@ -229,20 +219,14 @@ export default function ScheduleGrid() {
     if (time && draggedSlot && isDropValid(day, time, draggedSlot)) {
       const oldDate = getDateForDay(draggedSlot.dayOfWeek);
       const newDate = getDateForDay(day);
-
-      // Move attendance records for this slot
       const existingRecord = attendance.find(r =>
         r.studentId === draggedSlot.studentId &&
         r.date === oldDate &&
         r.startTime === draggedSlot.startTime
       );
       if (existingRecord) {
-        updateAttendance(existingRecord.id, {
-          date: newDate,
-          startTime: time,
-        });
+        updateAttendance(existingRecord.id, { date: newDate, startTime: time });
       }
-
       moveSchedule(draggedSlot.id, day, time);
     }
     setDraggedSlot(null);
@@ -252,6 +236,23 @@ export default function ScheduleGrid() {
   const handleDragEnd = () => {
     setDraggedSlot(null);
     setHoveredCell(null);
+  };
+
+  // Delete with undo
+  const handleDeleteSlot = (slot: ScheduleSlot, displayName: string) => {
+    if (!confirm(`${displayName} 스케줄을 삭제하시겠습니까?`)) return;
+    removeSchedule(slot.id);
+    setDeletedSlot(slot);
+    if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    undoTimeoutRef.current = setTimeout(() => setDeletedSlot(null), 5000);
+  };
+
+  const handleUndo = () => {
+    if (deletedSlot) {
+      restoreSchedule(deletedSlot);
+      setDeletedSlot(null);
+      if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    }
   };
 
   const handleAddMakeup = (data: { studentId: string; dayOfWeek: DayOfWeek; startTime: string; duration: number }) => {
@@ -341,25 +342,13 @@ export default function ScheduleGrid() {
         </div>
       </div>
 
-      {/* Week Navigation */}
+      {/* Week Navigation - date range only */}
       <div className="flex items-center gap-3 mb-4">
         <button onClick={goToPrevWeek} className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-lg text-sm hover:bg-gray-50 text-gray-600">&lsaquo;</button>
-        {isCurrentWeek ? (
-          <span className="px-3 py-1.5 bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-medium">
-            이번주
-          </span>
-        ) : (
-          <button onClick={goToThisWeek} className="px-3 py-1.5 bg-gray-100 text-gray-600 border border-gray-200 rounded-lg text-xs font-medium hover:bg-indigo-50 hover:text-indigo-600">
-            이번주로
-          </button>
-        )}
-        <button onClick={goToNextWeek} className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-lg text-sm hover:bg-gray-50 text-gray-600">&rsaquo;</button>
-        <span className="text-sm font-medium text-gray-700 ml-1">
-          {format(currentWeekStart, 'M월 d일', { locale: ko })} ~ {format(weekEnd, 'M월 d일', { locale: ko })}
-          {!isCurrentWeek && (
-            <span className="ml-2 text-xs text-indigo-500">({getWeekLabel()})</span>
-          )}
+        <span className="text-sm font-semibold text-gray-800 px-2">
+          {format(currentWeekStart, 'yyyy년 M월 d일', { locale: ko })} ~ {format(weekEnd, 'M월 d일', { locale: ko })}
         </span>
+        <button onClick={goToNextWeek} className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-lg text-sm hover:bg-gray-50 text-gray-600">&rsaquo;</button>
       </div>
 
       {/* Legend */}
@@ -473,7 +462,6 @@ export default function ScheduleGrid() {
                     const leftPercent = slot.column * widthPercent;
                     const endTime = getEndTime(slot.startTime, slot.duration);
 
-                    // Attendance status for this specific block (matched by startTime)
                     const attendanceRecord = !isTrial && student ? getAttendanceRecord(student.id, dateStr, slot.startTime) : null;
                     const attendanceClass = attendanceRecord ? STATUS_COLORS[attendanceRecord.status] || '' : '';
                     const isAbsent = attendanceRecord?.status === '결석';
@@ -482,7 +470,7 @@ export default function ScheduleGrid() {
                       <div
                         key={slot.id}
                         draggable
-                        onDragStart={() => handleDragStart(slot)}
+                        onDragStart={(e) => handleDragStart(slot, e)}
                         onDragEnd={handleDragEnd}
                         className={`
                           absolute z-10 px-1.5 py-1 rounded cursor-grab active:cursor-grabbing
@@ -520,17 +508,17 @@ export default function ScheduleGrid() {
                           </div>
                         )}
 
-                        {/* Memo inline display */}
+                        {/* Memo callout */}
                         {attendanceRecord?.memo && (
-                          <div
-                            className="text-[9px] text-gray-500 mt-0.5 truncate leading-tight"
-                            title={attendanceRecord.memo}
-                          >
-                            {attendanceRecord.memo}
+                          <div className="mt-0.5 bg-yellow-50 border-l-2 border-yellow-400 px-1 py-0.5 rounded-r" title={attendanceRecord.memo}>
+                            <div className="text-[8px] text-yellow-600 font-bold leading-none mb-px">메모</div>
+                            <div className="text-[9px] text-gray-600 truncate leading-tight">
+                              {attendanceRecord.memo}
+                            </div>
                           </div>
                         )}
 
-                        {/* Attendance buttons - shown on hover for regular students */}
+                        {/* Attendance buttons on hover */}
                         {!isTrial && student && (
                           <div className="absolute bottom-0 left-0 right-0 bg-white/90 border-t border-gray-200 hidden group-hover/card:flex items-center justify-center gap-0.5 py-0.5">
                             {(['출석', '결석', '보강'] as AttendanceStatus[]).map(status => (
@@ -561,7 +549,7 @@ export default function ScheduleGrid() {
                                   memo: attendanceRecord?.memo || '',
                                 });
                               }}
-                              className="w-5 h-5 rounded-full bg-gray-100 text-gray-400 hover:bg-gray-200 text-[8px] font-bold"
+                              className="w-5 h-5 rounded-full bg-yellow-100 text-yellow-600 hover:bg-yellow-200 text-[8px] font-bold"
                               title="메모"
                             >
                               M
@@ -573,7 +561,7 @@ export default function ScheduleGrid() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (confirm(`${displayName} 스케줄을 삭제하시겠습니까?`)) removeSchedule(slot.id);
+                            handleDeleteSlot(slot, displayName);
                           }}
                           className="absolute top-0 right-0 w-4 h-4 bg-red-500 text-white rounded-full text-[10px] leading-none items-center justify-center hidden group-hover/card:flex"
                         >
@@ -588,6 +576,25 @@ export default function ScheduleGrid() {
           </div>
         </div>
       </div>
+
+      {/* Undo Toast */}
+      {deletedSlot && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-5 py-3 rounded-xl shadow-lg flex items-center gap-4 z-50 animate-fade-in">
+          <span className="text-sm">스케줄이 삭제되었습니다</span>
+          <button
+            onClick={handleUndo}
+            className="text-sm font-bold text-indigo-300 hover:text-indigo-200 underline underline-offset-2"
+          >
+            되돌리기
+          </button>
+          <button
+            onClick={() => setDeletedSlot(null)}
+            className="text-gray-400 hover:text-white text-xs ml-1"
+          >
+            &times;
+          </button>
+        </div>
+      )}
 
       {/* Makeup Modal */}
       <Modal isOpen={showMakeupForm} onClose={() => setShowMakeupForm(false)} title="보강 수업 추가">

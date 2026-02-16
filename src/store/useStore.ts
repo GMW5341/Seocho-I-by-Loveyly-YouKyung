@@ -125,6 +125,10 @@ export function useStore() {
     setSchedules(prev => prev.filter(s => s.id !== id));
   }, []);
 
+  const restoreSchedule = useCallback((slot: ScheduleSlot) => {
+    setSchedules(prev => [...prev, slot]);
+  }, []);
+
   const moveSchedule = useCallback((id: string, newDay: ScheduleSlot['dayOfWeek'], newTime: string) => {
     setSchedules(prev => prev.map(s =>
       s.id === id ? { ...s, dayOfWeek: newDay, startTime: newTime } : s
@@ -359,7 +363,7 @@ export function useStore() {
   return {
     activeTab, setActiveTab,
     students, addStudent, updateStudent, deleteStudent, permanentDeleteStudent,
-    schedules, addSchedule, updateSchedule, removeSchedule, moveSchedule,
+    schedules, addSchedule, updateSchedule, removeSchedule, restoreSchedule, moveSchedule,
     attendance, addAttendance, updateAttendance, deleteAttendance,
     payments, addPayment, updatePayment, deletePayment,
     holidays, addHoliday, removeHoliday,
