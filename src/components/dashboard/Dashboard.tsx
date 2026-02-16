@@ -3,17 +3,33 @@ import { format, parseISO, startOfMonth, endOfMonth, subMonths, isWithinInterval
 import { ko } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { useAppStore } from '../../store/StoreContext';
-import { formatCurrency, getDayOfWeekFromDate } from '../../utils/helpers';
+import { formatCurrency, getDayOfWeekFromDate, expandHolidayDates } from '../../utils/helpers';
 import Badge from '../common/Badge';
 
 const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
 
 export default function Dashboard() {
-  const { students, payments, attendance, schedules } = useAppStore();
+  const { students, payments, attendance, schedules, holidays } = useAppStore();
   const activeStudents = useMemo(() => students.filter(s => s.active), [students]);
 
-  // Today's schedule
+  // Check if today is a holiday
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const holidayDates = useMemo(() => expandHolidayDates(holidays), [holidays]);
+  const isTodayHoliday = holidayDates.includes(todayStr);
+  const todayHolidayName = useMemo(() => {
+    for (const h of holidays) {
+      if (h.endDate) {
+        if (todayStr >= h.date && todayStr <= h.endDate) return h.name;
+      } else if (h.date === todayStr) {
+        return h.name;
+      }
+    }
+    return null;
+  }, [holidays, todayStr]);
+
+  // Today's schedule (empty if holiday)
   const todaySchedule = useMemo(() => {
+    if (isTodayHoliday) return [];
     const today = new Date();
     const dayOfWeek = getDayOfWeekFromDate(format(today, 'yyyy-MM-dd'));
     if (!dayOfWeek) return [];
@@ -25,7 +41,7 @@ export default function Dashboard() {
       }))
       .filter(s => s.student)
       .sort((a, b) => a.startTime.localeCompare(b.startTime));
-  }, [schedules, activeStudents]);
+  }, [schedules, activeStudents, isTodayHoliday]);
 
   // Monthly revenue chart data (last 6 months)
   const revenueChartData = useMemo(() => {
@@ -138,7 +154,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 md:gap-3 mb-4 md:mb-6">
         {[
           { label: '총 원생', value: `${metrics.totalStudents}명`, color: 'text-gray-900' },
-          { label: '오늘 수업', value: `${metrics.todayClassCount}건`, color: 'text-indigo-600' },
+          { label: '오늘 수업', value: isTodayHoliday ? '휴원' : `${metrics.todayClassCount}건`, color: isTodayHoliday ? 'text-red-500' : 'text-indigo-600' },
           { label: '이번달 매출', value: formatCurrency(metrics.monthRevenue), color: 'text-green-600' },
           { label: '결제 건수', value: `${metrics.monthPaymentCount}건`, color: 'text-blue-600' },
           { label: '미결제', value: `${metrics.unpaidCount}명`, color: 'text-red-600' },
@@ -265,7 +281,13 @@ export default function Dashboard() {
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <h4 className="text-sm font-semibold text-gray-700 mb-4">오늘 수업 일정</h4>
           <div className="space-y-2 max-h-[250px] overflow-y-auto">
-            {todaySchedule.length > 0 ? todaySchedule.map(slot => (
+            {isTodayHoliday ? (
+              <div className="text-center py-8">
+                <div className="text-red-400 text-2xl mb-2">휴원</div>
+                <div className="text-sm font-semibold text-red-500">{todayHolidayName}</div>
+                <div className="text-xs text-red-400 mt-1">오늘은 공휴일/휴원일입니다</div>
+              </div>
+            ) : todaySchedule.length > 0 ? todaySchedule.map(slot => (
               <div key={slot.id} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50">
                 <div className="text-xs font-mono text-gray-500 w-12">{slot.startTime}</div>
                 <div className="flex-1">
