@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type {
   Student, ScheduleSlot, AttendanceRecord, Payment, Holiday,
@@ -6,6 +6,7 @@ import type {
   SpecialClass, SpecialClassStudent
 } from '../types';
 import { DEFAULT_SETTINGS } from '../utils/helpers';
+import { pushToCloud, isSyncEnabled, initSyncOnStartup } from '../services/firebaseSync';
 
 const STORAGE_KEYS = {
   students: 'seocho_students',
@@ -78,20 +79,36 @@ export function useStore() {
   const [specialClassStudents, setSpecialClassStudents] = useState<SpecialClassStudent[]>(() => loadFromStorage(STORAGE_KEYS.specialClassStudents, []));
   const [logoDataUrl, setLogoDataUrl] = useState<string>(() => loadFromStorage(STORAGE_KEYS.logoDataUrl, ''));
 
-  // Persist to localStorage on changes
-  useEffect(() => { saveToStorage(STORAGE_KEYS.students, students); }, [students]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.schedules, schedules); }, [schedules]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.attendance, attendance); }, [attendance]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.payments, payments); }, [payments]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.holidays, holidays); }, [holidays]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.settings, settings); }, [settings]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.trialStudents, trialStudents); }, [trialStudents]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.trialLessons, trialLessons); }, [trialLessons]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.curriculum, curriculum); }, [curriculum]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.messageTemplates, messageTemplates); }, [messageTemplates]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.specialClasses, specialClasses); }, [specialClasses]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.specialClassStudents, specialClassStudents); }, [specialClassStudents]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.logoDataUrl, logoDataUrl); }, [logoDataUrl]);
+  // Cloud sync: debounced push
+  const cloudSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleCloudPush = useCallback(() => {
+    if (!isSyncEnabled()) return;
+    if (cloudSyncTimer.current) clearTimeout(cloudSyncTimer.current);
+    cloudSyncTimer.current = setTimeout(() => { pushToCloud(); }, 1000);
+  }, []);
+
+  // Initialize cloud sync on startup
+  useEffect(() => {
+    initSyncOnStartup(() => {
+      // Cloud data received - reload to pick up changes
+      window.location.reload();
+    });
+  }, []);
+
+  // Persist to localStorage on changes + trigger cloud sync
+  useEffect(() => { saveToStorage(STORAGE_KEYS.students, students); scheduleCloudPush(); }, [students, scheduleCloudPush]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.schedules, schedules); scheduleCloudPush(); }, [schedules, scheduleCloudPush]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.attendance, attendance); scheduleCloudPush(); }, [attendance, scheduleCloudPush]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.payments, payments); scheduleCloudPush(); }, [payments, scheduleCloudPush]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.holidays, holidays); scheduleCloudPush(); }, [holidays, scheduleCloudPush]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.settings, settings); scheduleCloudPush(); }, [settings, scheduleCloudPush]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.trialStudents, trialStudents); scheduleCloudPush(); }, [trialStudents, scheduleCloudPush]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.trialLessons, trialLessons); scheduleCloudPush(); }, [trialLessons, scheduleCloudPush]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.curriculum, curriculum); scheduleCloudPush(); }, [curriculum, scheduleCloudPush]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.messageTemplates, messageTemplates); scheduleCloudPush(); }, [messageTemplates, scheduleCloudPush]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.specialClasses, specialClasses); scheduleCloudPush(); }, [specialClasses, scheduleCloudPush]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.specialClassStudents, specialClassStudents); scheduleCloudPush(); }, [specialClassStudents, scheduleCloudPush]);
+  useEffect(() => { saveToStorage(STORAGE_KEYS.logoDataUrl, logoDataUrl); scheduleCloudPush(); }, [logoDataUrl, scheduleCloudPush]);
 
   // Student CRUD
   const addStudent = useCallback((student: Omit<Student, 'id' | 'createdAt' | 'active'>) => {

@@ -3,6 +3,11 @@ import { format } from 'date-fns';
 import { useAppStore } from '../../store/StoreContext';
 import type { SeasonType, DayOfWeek, ClassDuration } from '../../types';
 import { DAYS_OF_WEEK, formatCurrency } from '../../utils/helpers';
+import {
+  getSyncConfig, getSyncRoom, isSyncEnabled as checkSyncEnabled,
+  setupSync, stopSync, setSyncEnabled, pushToCloud,
+  type FirebaseConfig,
+} from '../../services/firebaseSync';
 
 export default function SettingsPage() {
   const { settings, updateSettings, holidays, addHoliday, removeHoliday, logoDataUrl, setLogoDataUrl } = useAppStore();
@@ -10,6 +15,19 @@ export default function SettingsPage() {
   const [newHolidayEndDate, setNewHolidayEndDate] = useState('');
   const [newHolidayName, setNewHolidayName] = useState('');
   const [isRangeMode, setIsRangeMode] = useState(false);
+
+  // Cloud sync state
+  const [syncEnabled, setSyncEnabledState] = useState(checkSyncEnabled);
+  const [syncRoom, setSyncRoom] = useState(getSyncRoom);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle');
+  const [syncMessage, setSyncMessage] = useState('');
+  const [showSyncSetup, setShowSyncSetup] = useState(false);
+  const existingConfig = getSyncConfig();
+  const [firebaseConfig, setFirebaseConfig] = useState<FirebaseConfig>(existingConfig || {
+    apiKey: '', authDomain: '', projectId: '',
+    storageBucket: '', messagingSenderId: '', appId: '',
+  });
+  const [configInput, setConfigInput] = useState('');
 
   const handleSeasonChange = (season: SeasonType) => {
     updateSettings({ currentSeason: season });
@@ -357,6 +375,175 @@ export default function SettingsPage() {
             <p className="text-sm text-gray-400 py-2">등록된 공휴일이 없습니다.</p>
           )}
         </div>
+      </section>
+
+      {/* Cloud Sync */}
+      <section className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-sm font-semibold text-gray-700">클라우드 동기화</h4>
+          {syncEnabled && syncStatus !== 'error' && (
+            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">연결됨</span>
+          )}
+        </div>
+        <p className="text-xs text-gray-400 mb-4">
+          Firebase를 연결하면 PC, 모바일, 다른 기기에서 데이터가 자동으로 동기화됩니다.
+        </p>
+
+        {syncEnabled && !showSyncSetup ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              <span className="text-sm text-green-700 font-medium">동기화 활성화됨</span>
+              <span className="text-xs text-green-600 ml-auto">방 이름: {getSyncRoom()}</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={async () => {
+                  setSyncStatus('connecting');
+                  const success = await pushToCloud();
+                  setSyncStatus(success ? 'connected' : 'error');
+                  setSyncMessage(success ? '수동 업로드 완료!' : '업로드 실패');
+                  setTimeout(() => setSyncMessage(''), 3000);
+                }}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"
+              >
+                수동 업로드
+              </button>
+              <button
+                onClick={() => setShowSyncSetup(true)}
+                className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200"
+              >
+                설정 변경
+              </button>
+              <button
+                onClick={() => {
+                  stopSync();
+                  setSyncEnabled(false);
+                  setSyncEnabledState(false);
+                  setSyncStatus('idle');
+                }}
+                className="bg-red-100 text-red-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-200"
+              >
+                동기화 해제
+              </button>
+            </div>
+            {syncMessage && <p className="text-xs text-indigo-600 font-medium">{syncMessage}</p>}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Setup instructions */}
+            <div className="bg-indigo-50 rounded-lg p-4">
+              <h5 className="text-xs font-bold text-indigo-700 mb-2">Firebase 설정 방법 (최초 1회)</h5>
+              <ol className="text-xs text-indigo-600 space-y-1 list-decimal list-inside">
+                <li><a href="https://console.firebase.google.com" target="_blank" rel="noopener noreferrer" className="underline">Firebase Console</a> 접속 → 프로젝트 만들기 (무료)</li>
+                <li>프로젝트 생성 후 → Firestore Database → 데이터베이스 만들기 → 테스트 모드로 시작</li>
+                <li>프로젝트 설정(톱니바퀴) → 일반 → 내 앱 → 웹 앱 추가 → Firebase SDK snippet 복사</li>
+                <li>아래 입력란에 복사한 설정값 붙여넣기</li>
+              </ol>
+            </div>
+
+            {/* Config paste area */}
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">
+                Firebase 설정 코드 붙여넣기
+              </label>
+              <textarea
+                value={configInput}
+                onChange={e => {
+                  setConfigInput(e.target.value);
+                  // Try to parse Firebase config from pasted code
+                  try {
+                    const text = e.target.value;
+                    const extract = (key: string): string => {
+                      const regex = new RegExp(`${key}\\s*[:=]\\s*["'\`]([^"'\`]+)["'\`]`);
+                      return regex.exec(text)?.[1] || '';
+                    };
+                    const parsed: FirebaseConfig = {
+                      apiKey: extract('apiKey'),
+                      authDomain: extract('authDomain'),
+                      projectId: extract('projectId'),
+                      storageBucket: extract('storageBucket'),
+                      messagingSenderId: extract('messagingSenderId'),
+                      appId: extract('appId'),
+                    };
+                    if (parsed.apiKey && parsed.projectId) {
+                      setFirebaseConfig(parsed);
+                    }
+                  } catch { /* ignore parse errors */ }
+                }}
+                placeholder={`const firebaseConfig = {\n  apiKey: "...",\n  authDomain: "...",\n  projectId: "...",\n  ...\n};`}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs font-mono resize-none h-28 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none"
+              />
+            </div>
+
+            {/* Parsed values preview */}
+            {firebaseConfig.projectId && (
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-xs font-medium text-gray-500 mb-1">인식된 프로젝트:</p>
+                <p className="text-sm font-semibold text-gray-800">{firebaseConfig.projectId}</p>
+              </div>
+            )}
+
+            {/* Sync room name */}
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">
+                동기화 방 이름 (모든 기기에서 같은 이름 입력)
+              </label>
+              <input
+                type="text"
+                value={syncRoom}
+                onChange={e => setSyncRoom(e.target.value)}
+                placeholder="예: 서초아이미술"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none"
+              />
+            </div>
+
+            {/* Connect button */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                disabled={!firebaseConfig.projectId || !syncRoom || syncStatus === 'connecting'}
+                onClick={() => {
+                  setSyncStatus('connecting');
+                  setSyncMessage('');
+                  try {
+                    const ok = setupSync(firebaseConfig, syncRoom, () => {
+                      window.location.reload();
+                    });
+                    if (ok) {
+                      setSyncStatus('connected');
+                      setSyncEnabledState(true);
+                      setShowSyncSetup(false);
+                      setSyncMessage('동기화가 시작되었습니다!');
+                    } else {
+                      setSyncStatus('error');
+                      setSyncMessage('연결에 실패했습니다. 설정을 확인해주세요.');
+                    }
+                  } catch {
+                    setSyncStatus('error');
+                    setSyncMessage('연결에 실패했습니다.');
+                  }
+                }}
+                className="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {syncStatus === 'connecting' ? '연결 중...' : '동기화 시작'}
+              </button>
+              {showSyncSetup && syncEnabled && (
+                <button
+                  onClick={() => setShowSyncSetup(false)}
+                  className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200"
+                >
+                  취소
+                </button>
+              )}
+            </div>
+
+            {syncMessage && (
+              <p className={`text-xs font-medium ${syncStatus === 'error' ? 'text-red-600' : 'text-green-600'}`}>
+                {syncMessage}
+              </p>
+            )}
+          </div>
+        )}
       </section>
 
       {/* Data Management */}
