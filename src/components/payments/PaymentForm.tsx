@@ -15,6 +15,7 @@ const PAYMENT_METHODS: PaymentMethod[] = ['계좌이체', '현금', '카드', '�
 
 export default function PaymentForm({ students, settings, payment, onSubmit, onCancel }: PaymentFormProps) {
   const [studentId, setStudentId] = useState(payment?.studentId || '');
+  const [studentSearch, setStudentSearch] = useState('');
   const [totalSessions, setTotalSessions] = useState(payment?.totalSessions || 4);
   const [classDuration, setClassDuration] = useState<ClassDuration>(payment?.classDuration || 60);
   const [originalAmount, setOriginalAmount] = useState(payment?.originalAmount || payment?.amount || 0);
@@ -73,17 +74,29 @@ export default function PaymentForm({ students, settings, payment, onSubmit, onC
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">원생 *</label>
+        {!payment && (
+          <input
+            type="text"
+            placeholder="이름 검색..."
+            value={studentSearch}
+            onChange={e => setStudentSearch(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-1"
+          />
+        )}
         <select
           value={studentId}
           onChange={e => setStudentId(e.target.value)}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
           required
           disabled={!!payment}
+          size={!payment && studentSearch ? Math.min(6, students.filter(s => s.name.includes(studentSearch)).length + 1) : 1}
         >
           <option value="">원생을 선택하세요</option>
-          {students.map(s => (
-            <option key={s.id} value={s.id}>{s.name} ({s.level} / {s.classDuration}분)</option>
-          ))}
+          {students
+            .filter(s => !studentSearch || s.name.includes(studentSearch))
+            .map(s => (
+              <option key={s.id} value={s.id}>{s.name} ({s.level} / {s.classDuration}분)</option>
+            ))}
         </select>
       </div>
 

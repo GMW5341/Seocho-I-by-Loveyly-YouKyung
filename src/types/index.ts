@@ -48,6 +48,7 @@ export interface ScheduleSlot {
   isTrial?: boolean; // 체험 수업 여부
   trialStudentId?: string; // 체험 수업 학생 ID
   date?: string; // ISO date for specific date slots (보강)
+  isOverrideHidden?: boolean; // 특정 주에 정규 슬롯을 숨기는 마커
 }
 
 export interface AttendanceRecord {

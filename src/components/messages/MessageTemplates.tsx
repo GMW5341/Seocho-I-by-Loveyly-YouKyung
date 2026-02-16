@@ -12,6 +12,7 @@ export default function MessageTemplates() {
   const [showForm, setShowForm] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<MessageTemplate | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Form state
@@ -60,9 +61,13 @@ export default function MessageTemplates() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const filtered = filterCategory === 'all'
-    ? messageTemplates
-    : messageTemplates.filter(t => t.category === filterCategory);
+  const filtered = messageTemplates.filter(t => {
+    const matchesCategory = filterCategory === 'all' || t.category === filterCategory;
+    const matchesSearch = !searchQuery ||
+      t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.content.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
 
   const sorted = [...filtered].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
@@ -105,6 +110,22 @@ export default function MessageTemplates() {
             </button>
           );
         })}
+      </div>
+
+      {/* Search */}
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="제목 또는 내용으로 검색..."
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-yellow-300 focus:border-yellow-400 outline-none"
+        />
+        {searchQuery && (
+          <p className="text-xs text-gray-400 mt-1">
+            검색 결과: {sorted.length}건
+          </p>
+        )}
       </div>
 
       {/* Templates list */}

@@ -47,8 +47,8 @@ interface DisplaySlot {
 
 export default function ScheduleGrid() {
   const {
-    students, schedules, settings, trialStudents, attendance, payments,
-    moveSchedule, removeSchedule, restoreSchedule, addSchedule,
+    students, schedules, settings, trialStudents, attendance, payments, holidays,
+    moveSchedule, updateSchedule, removeSchedule, restoreSchedule, addSchedule,
     addTrialStudent, addTrialLesson,
     addAttendance, updateAttendance, deleteAttendance,
     specialClasses, specialClassStudents,
@@ -81,6 +81,18 @@ export default function ScheduleGrid() {
     date.setDate(date.getDate() + offset);
     return format(date, 'yyyy-MM-dd');
   }, [currentWeekStart]);
+
+  // 이번 주 공휴일/휴원일 계산
+  const getHolidayName = useCallback((dateStr: string): string | null => {
+    for (const h of holidays) {
+      if (h.endDate) {
+        if (dateStr >= h.date && dateStr <= h.endDate) return h.name;
+      } else if (h.date === dateStr) {
+        return h.name;
+      }
+    }
+    return null;
+  }, [holidays]);
 
   const activeStudents = useMemo(() => students.filter(s => s.active), [students]);
 
@@ -167,8 +179,27 @@ export default function ScheduleGrid() {
 
   // Filter schedules
   const filteredSchedules = useMemo(() => {
+    const weekStartStr = format(currentWeekStart, 'yyyy-MM-dd');
+    const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
+
+    // 이번 주에 숨김 처리된 정규 슬롯 목록 수집
+    const hiddenOverrides = schedules.filter(s =>
+      s.isOverrideHidden && s.date && s.date >= weekStartStr && s.date <= weekEndStr
+    );
+
     return schedules.filter(s => {
+      // 숨김 마커 슬롯 자체는 표시하지 않음
+      if (s.isOverrideHidden) return false;
+
       if (s.isRegular) {
+        // 이번 주에 이 정규 슬롯을 숨기는 오버라이드가 있는지 확인
+        const isHiddenThisWeek = hiddenOverrides.some(h =>
+          h.studentId === s.studentId &&
+          h.dayOfWeek === s.dayOfWeek &&
+          h.startTime === s.startTime
+        );
+        if (isHiddenThisWeek) return false;
+
         const studentPayments = payments.filter(p => p.studentId === s.studentId);
         if (studentPayments.length > 0) {
           const hasActive = studentPayments.some(p => !p.completed && p.remainingSessions > 0);
@@ -177,7 +208,7 @@ export default function ScheduleGrid() {
         return true;
       }
       if (s.date) {
-        return s.date >= format(currentWeekStart, 'yyyy-MM-dd') && s.date <= format(weekEnd, 'yyyy-MM-dd');
+        return s.date >= weekStartStr && s.date <= weekEndStr;
       }
       return true;
     });
@@ -284,7 +315,35 @@ export default function ScheduleGrid() {
       if (existingRecord) {
         updateAttendance(existingRecord.id, { date: newDate, startTime: time });
       }
-      moveSchedule(draggedSlot.id, day, time);
+
+      if (draggedSlot.isRegular) {
+        // 정규 스케줄: 원본은 유지하고, 이번 주에만 적용되는 임시 슬롯 생성
+        // 원래 날짜에 대한 "숨김" 마커 추가 (date 필드에 해당 주 날짜 기록)
+        addSchedule({
+          studentId: draggedSlot.studentId,
+          dayOfWeek: draggedSlot.dayOfWeek,
+          startTime: draggedSlot.startTime,
+          duration: draggedSlot.duration,
+          isRegular: false,
+          date: oldDate,
+          isOverrideHidden: true, // 이번 주 원래 슬롯 숨김용
+        } as Omit<ScheduleSlot, 'id'>);
+        // 새 위치에 임시 슬롯 생성
+        addSchedule({
+          studentId: draggedSlot.studentId,
+          dayOfWeek: day,
+          startTime: time,
+          duration: draggedSlot.duration,
+          isRegular: false,
+          date: newDate,
+        });
+      } else {
+        // 비정규(보강 등): 기존처럼 직접 이동
+        moveSchedule(draggedSlot.id, day, time);
+        if (draggedSlot.date) {
+          updateSchedule(draggedSlot.id, { date: newDate });
+        }
+      }
     }
     setDraggedSlot(null);
     setHoveredCell(null);
@@ -312,15 +371,27 @@ export default function ScheduleGrid() {
     }
   };
 
-  const handleAddMakeup = (data: { studentId: string; dayOfWeek: DayOfWeek; startTime: string; duration: number }) => {
+  const handleAddMakeup = (data: { studentId: string; dayOfWeek: DayOfWeek; startTime: string; duration: number; autoAttend: boolean }) => {
+    const date = getDateForDay(data.dayOfWeek);
     addSchedule({
       studentId: data.studentId,
       dayOfWeek: data.dayOfWeek,
       startTime: data.startTime,
       duration: data.duration as 60 | 80 | 100,
       isRegular: false,
-      date: getDateForDay(data.dayOfWeek),
+      date,
     });
+    if (data.autoAttend) {
+      addAttendance({
+        studentId: data.studentId,
+        date,
+        status: '보강',
+        startTime: data.startTime,
+        duration: data.duration as ClassDuration,
+        isMakeup: true,
+        memo: '',
+      });
+    }
     setShowMakeupForm(false);
   };
 
@@ -478,17 +549,21 @@ export default function ScheduleGrid() {
               const hours = getOperatingHours(settings, day);
               const dateStr = getDateForDay(day);
               const slotCount = (daySchedules[day] || []).length;
+              const holidayName = getHolidayName(dateStr);
               return (
                 <div
                   key={day}
                   onClick={() => !selectedDay && hours && setSelectedDay(day)}
-                  className={`flex-1 px-3 py-2 text-sm font-medium text-gray-700 text-center border-r border-gray-200 last:border-r-0 ${
-                    !selectedDay && hours ? 'cursor-pointer hover:bg-indigo-50 transition-colors' : ''
-                  }`}
+                  className={`flex-1 px-3 py-2 text-sm font-medium text-center border-r border-gray-200 last:border-r-0 ${
+                    holidayName ? 'bg-red-50 text-red-600' : 'text-gray-700'
+                  } ${!selectedDay && hours ? 'cursor-pointer hover:bg-indigo-50 transition-colors' : ''}`}
                 >
                   {day}요일
                   <span className="block text-[10px] font-normal text-gray-400">{format(new Date(dateStr + 'T00:00:00'), 'M/d')}</span>
-                  {hours && <span className="block text-[10px] font-normal text-gray-400">{hours.start}-{hours.end}</span>}
+                  {holidayName && (
+                    <span className="block text-[10px] font-semibold text-red-500">{holidayName}</span>
+                  )}
+                  {!holidayName && hours && <span className="block text-[10px] font-normal text-gray-400">{hours.start}-{hours.end}</span>}
                   {selectedDay && <span className="block text-[10px] font-medium text-indigo-500 mt-0.5">{slotCount}개 수업</span>}
                 </div>
               );
@@ -524,6 +599,8 @@ export default function ScheduleGrid() {
               const opStart = hours ? timeToMinutes(hours.start) : timeRange.earliest;
               const opEnd = hours ? timeToMinutes(hours.end) : timeRange.latest;
               const isDayView = !!selectedDay;
+              const dayHolidayName = getHolidayName(dateStr);
+              const isDayHoliday = !!dayHolidayName;
 
               return (
                 <div
@@ -531,9 +608,20 @@ export default function ScheduleGrid() {
                   ref={el => { dayColumnRefs.current[day] = el; }}
                   className={`flex-1 relative border-r border-gray-200 last:border-r-0 ${!isOperating ? 'bg-gray-100' : ''}`}
                   style={{ height: totalHeight }}
-                  onDragOver={e => isOperating ? handleDayDragOver(e, day) : undefined}
-                  onDrop={e => isOperating ? handleDayDrop(e, day) : undefined}
+                  onDragOver={e => isOperating && !isDayHoliday ? handleDayDragOver(e, day) : undefined}
+                  onDrop={e => isOperating && !isDayHoliday ? handleDayDrop(e, day) : undefined}
                 >
+                  {/* Holiday overlay */}
+                  {isDayHoliday && (
+                    <div className="absolute inset-0 bg-red-50/80 z-30 flex items-center justify-center pointer-events-none">
+                      <div className="text-center">
+                        <div className="text-red-400 text-2xl mb-1">&#10005;</div>
+                        <div className="text-sm font-semibold text-red-500">{dayHolidayName}</div>
+                        <div className="text-xs text-red-400">휴원</div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Non-operating overlays */}
                   {hours && timeToMinutes(hours.start) > timeRange.earliest && (
                     <div className="absolute left-0 right-0 bg-gray-100/70" style={{ top: 0, height: (timeToMinutes(hours.start) - timeRange.earliest) * PX_PER_MINUTE }} />

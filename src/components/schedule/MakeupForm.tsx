@@ -4,7 +4,7 @@ import { DAYS_OF_WEEK } from '../../utils/helpers';
 
 interface MakeupFormProps {
   students: Student[];
-  onSubmit: (data: { studentId: string; dayOfWeek: DayOfWeek; startTime: string; duration: number }) => void;
+  onSubmit: (data: { studentId: string; dayOfWeek: DayOfWeek; startTime: string; duration: number; autoAttend: boolean }) => void;
   onCancel: () => void;
 }
 
@@ -13,19 +13,28 @@ export default function MakeupForm({ students, onSubmit, onCancel }: MakeupFormP
   const [dayOfWeek, setDayOfWeek] = useState<DayOfWeek>('화');
   const [startTime, setStartTime] = useState('14:00');
   const [duration, setDuration] = useState<ClassDuration>(60);
+  const [autoAttend, setAutoAttend] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const selectedStudent = students.find(s => s.id === studentId);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!studentId) return;
-    onSubmit({ studentId, dayOfWeek, startTime, duration });
+    onSubmit({ studentId, dayOfWeek, startTime, duration, autoAttend });
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">원생 선택</label>
+        <input
+          type="text"
+          placeholder="이름 검색..."
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-1"
+        />
         <select
           value={studentId}
           onChange={e => {
@@ -35,11 +44,14 @@ export default function MakeupForm({ students, onSubmit, onCancel }: MakeupFormP
           }}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
           required
+          size={searchQuery ? Math.min(6, students.filter(s => s.name.includes(searchQuery)).length + 1) : 1}
         >
           <option value="">원생을 선택하세요</option>
-          {students.map(s => (
-            <option key={s.id} value={s.id}>{s.name} ({s.level})</option>
-          ))}
+          {students
+            .filter(s => !searchQuery || s.name.includes(searchQuery))
+            .map(s => (
+              <option key={s.id} value={s.id}>{s.name} ({s.level})</option>
+            ))}
         </select>
       </div>
 
@@ -88,6 +100,16 @@ export default function MakeupForm({ students, onSubmit, onCancel }: MakeupFormP
           {selectedStudent.name} | 정규: {(selectedStudent.regularSchedule || []).map(entry => `${entry.day} ${entry.startTime}`).join(', ')} ({selectedStudent.classDuration}분)
         </div>
       )}
+
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={autoAttend}
+          onChange={e => setAutoAttend(e.target.checked)}
+          className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+        />
+        <span className="text-sm text-gray-700">추가 시 자동으로 보강 출석 처리</span>
+      </label>
 
       <div className="flex gap-3 pt-2">
         <button type="submit" className="flex-1 bg-indigo-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-indigo-700">
