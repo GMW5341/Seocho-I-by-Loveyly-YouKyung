@@ -238,7 +238,10 @@ export default function SpecialClassManager() {
               <div>
                 <h4 className="text-lg font-bold text-gray-800">{selectedClass.name}</h4>
                 <p className="text-sm text-gray-500 mt-1">
-                  {selectedClass.startDate} ~ {selectedClass.endDate} | {selectedClass.duration}분 수업
+                  {selectedClass.startDate && selectedClass.endDate
+                    ? `${selectedClass.startDate} ~ ${selectedClass.endDate} (${Math.round((new Date(selectedClass.endDate).getTime() - new Date(selectedClass.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1}일간)`
+                    : '기간 미설정'
+                  } | {selectedClass.duration}분 수업
                 </p>
                 {selectedClass.schedule.length > 0 && (
                   <p className="text-sm text-gray-500 mt-0.5">
@@ -390,25 +393,34 @@ export default function SpecialClassManager() {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">시작일</label>
-              <input
-                type="date"
-                value={classStartDate}
-                onChange={e => setClassStartDate(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none"
-              />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">수업 기간 *</label>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <span className="block text-xs text-gray-400 mb-0.5">시작일</span>
+                <input
+                  type="date"
+                  value={classStartDate}
+                  onChange={e => setClassStartDate(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none"
+                />
+              </div>
+              <div>
+                <span className="block text-xs text-gray-400 mb-0.5">종료일</span>
+                <input
+                  type="date"
+                  value={classEndDate}
+                  onChange={e => setClassEndDate(e.target.value)}
+                  min={classStartDate || undefined}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">종료일</label>
-              <input
-                type="date"
-                value={classEndDate}
-                onChange={e => setClassEndDate(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none"
-              />
-            </div>
+            {classStartDate && classEndDate && classEndDate >= classStartDate && (
+              <p className="text-xs text-indigo-500 mt-1.5 font-medium">
+                {classStartDate} ~ {classEndDate} ({Math.round((new Date(classEndDate).getTime() - new Date(classStartDate).getTime()) / (1000 * 60 * 60 * 24)) + 1}일간)
+              </p>
+            )}
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
@@ -485,7 +497,7 @@ export default function SpecialClassManager() {
           <div className="flex gap-2 pt-2">
             <button
               onClick={handleClassSubmit}
-              disabled={!className.trim()}
+              disabled={!className.trim() || !classStartDate || !classEndDate}
               className="flex-1 bg-indigo-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {editingClass ? '수정' : '개설'}
