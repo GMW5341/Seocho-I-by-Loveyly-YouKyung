@@ -20,7 +20,15 @@ interface SidebarProps {
 export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
   return (
     <aside className="w-60 bg-white border-r border-gray-200 min-h-screen flex flex-col">
-      <div className="p-5 border-b border-gray-200">
+      <div className="p-5 border-b border-gray-200 flex flex-col items-center">
+        <img
+          src="/logo.png"
+          alt="서초아이미술"
+          className="w-28 h-28 rounded-full object-cover mb-2"
+          onError={(e) => {
+            (e.target as HTMLImageElement).style.display = 'none';
+          }}
+        />
         <h1 className="text-xl font-bold text-indigo-700">서초아이미술</h1>
         <p className="text-xs text-gray-500 mt-1">통합 운영 시스템</p>
       </div>

@@ -7,7 +7,7 @@ import StudentForm from './StudentForm';
 import Badge from '../common/Badge';
 
 export default function StudentList() {
-  const { students, addStudent, updateStudent, deleteStudent, payments, addSchedule } = useAppStore();
+  const { students, addStudent, updateStudent, deleteStudent, permanentDeleteStudent, payments, addSchedule } = useAppStore();
   const [showForm, setShowForm] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | undefined>();
   const [searchQuery, setSearchQuery] = useState('');
@@ -146,6 +146,16 @@ export default function StudentList() {
                           퇴원
                         </button>
                       )}
+                      <button
+                        onClick={() => {
+                          if (confirm(`${student.name} 원생의 모든 기록(스케줄, 출결, 결제)을 영구 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) {
+                            permanentDeleteStudent(student.id);
+                          }
+                        }}
+                        className="text-xs text-gray-400 hover:text-red-600 font-medium"
+                      >
+                        삭제
+                      </button>
                     </div>
                   </td>
                 </tr>

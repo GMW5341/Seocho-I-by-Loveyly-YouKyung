@@ -29,7 +29,7 @@ const STATUS_COLORS: Record<AttendanceStatus, string> = {
 
 export default function ScheduleGrid() {
   const {
-    students, schedules, settings, trialStudents, attendance,
+    students, schedules, settings, trialStudents, attendance, payments,
     moveSchedule, removeSchedule, addSchedule,
     addTrialStudent, addTrialLesson,
     addAttendance, updateAttendance, deleteAttendance,
@@ -38,7 +38,7 @@ export default function ScheduleGrid() {
   const [showTrialForm, setShowTrialForm] = useState(false);
   const [draggedSlot, setDraggedSlot] = useState<ScheduleSlot | null>(null);
   const [hoveredCell, setHoveredCell] = useState<{ day: DayOfWeek; time: string } | null>(null);
-  const [memoSlot, setMemoSlot] = useState<{ slotId: string; studentId: string; date: string; memo: string } | null>(null);
+  const [memoSlot, setMemoSlot] = useState<{ slotId: string; studentId: string; date: string; startTime: string; memo: string } | null>(null);
   const dayColumnRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Week navigation
@@ -49,6 +49,19 @@ export default function ScheduleGrid() {
   const goToPrevWeek = () => setCurrentWeekStart(prev => subWeeks(prev, 1));
   const goToNextWeek = () => setCurrentWeekStart(prev => addWeeks(prev, 1));
   const goToThisWeek = () => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }));
+
+  const isCurrentWeek = startOfWeek(new Date(), { weekStartsOn: 1 }).getTime() === currentWeekStart.getTime();
+
+  // Week offset label
+  const getWeekLabel = () => {
+    if (isCurrentWeek) return null;
+    const now = startOfWeek(new Date(), { weekStartsOn: 1 });
+    const diff = Math.round((currentWeekStart.getTime() - now.getTime()) / (7 * 24 * 60 * 60 * 1000));
+    if (diff === -1) return '지난주';
+    if (diff === 1) return '다음주';
+    if (diff < 0) return `${Math.abs(diff)}주 전`;
+    return `${diff}주 후`;
+  };
 
   // Get specific date for a day-of-week in the current viewed week
   const getDateForDay = useCallback((day: DayOfWeek): string => {
@@ -69,18 +82,24 @@ export default function ScheduleGrid() {
     return trialStudents.find(s => s.id === id);
   }, [trialStudents]);
 
-  // Get attendance record for student on a specific date
-  const getAttendanceRecord = useCallback((studentId: string, date: string) => {
+  // Get attendance record for student on a specific date + startTime
+  const getAttendanceRecord = useCallback((studentId: string, date: string, startTime?: string) => {
+    if (startTime) {
+      return attendance.find(r => r.studentId === studentId && r.date === date && r.startTime === startTime);
+    }
     return attendance.find(r => r.studentId === studentId && r.date === date);
   }, [attendance]);
 
-  // Toggle attendance from schedule block
-  const handleScheduleAttendance = (studentId: string, day: DayOfWeek, status: AttendanceStatus) => {
+  // Toggle attendance from schedule block - per slot
+  const handleScheduleAttendance = (studentId: string, day: DayOfWeek, status: AttendanceStatus, slotStartTime: string, slotDuration: ClassDuration) => {
     const date = getDateForDay(day);
     const student = getStudentById(studentId);
     if (!student) return;
 
-    const existing = getAttendanceRecord(studentId, date);
+    const existing = attendance.find(r =>
+      r.studentId === studentId && r.date === date && r.startTime === slotStartTime
+    );
+
     if (existing) {
       if (existing.status === status) {
         deleteAttendance(existing.id);
@@ -92,8 +111,8 @@ export default function ScheduleGrid() {
         studentId,
         date,
         status,
-        startTime: (student.regularSchedule || []).find(e => e.day === day)?.startTime || '14:00',
-        duration: student.classDuration,
+        startTime: slotStartTime,
+        duration: slotDuration,
         isMakeup: status === '보강',
         memo: '',
       });
@@ -130,17 +149,25 @@ export default function ScheduleGrid() {
     return markers;
   }, [timeRange]);
 
-  // Filter schedules: regular always shown, non-regular only if matching week
+  // Filter schedules: regular shown only if student has active payment (or no payment history), non-regular by date
   const filteredSchedules = useMemo(() => {
     return schedules.filter(s => {
-      if (s.isRegular) return true;
+      if (s.isRegular) {
+        // Check if student has payment history
+        const studentPayments = payments.filter(p => p.studentId === s.studentId);
+        if (studentPayments.length > 0) {
+          const hasActive = studentPayments.some(p => !p.completed && p.remainingSessions > 0);
+          if (!hasActive) return false;
+        }
+        return true;
+      }
       // Non-regular: if it has a date, check if it's in current week
       if (s.date) {
         return s.date >= format(currentWeekStart, 'yyyy-MM-dd') && s.date <= format(weekEnd, 'yyyy-MM-dd');
       }
       return true; // Legacy non-regular without date
     });
-  }, [schedules, currentWeekStart, weekEnd]);
+  }, [schedules, currentWeekStart, weekEnd, payments]);
 
   // Schedules grouped by day with layout info
   const daySchedules = useMemo(() => {
@@ -200,6 +227,22 @@ export default function ScheduleGrid() {
     e.preventDefault();
     const time = computeTimeFromY(e, day);
     if (time && draggedSlot && isDropValid(day, time, draggedSlot)) {
+      const oldDate = getDateForDay(draggedSlot.dayOfWeek);
+      const newDate = getDateForDay(day);
+
+      // Move attendance records for this slot
+      const existingRecord = attendance.find(r =>
+        r.studentId === draggedSlot.studentId &&
+        r.date === oldDate &&
+        r.startTime === draggedSlot.startTime
+      );
+      if (existingRecord) {
+        updateAttendance(existingRecord.id, {
+          date: newDate,
+          startTime: time,
+        });
+      }
+
       moveSchedule(draggedSlot.id, day, time);
     }
     setDraggedSlot(null);
@@ -262,7 +305,11 @@ export default function ScheduleGrid() {
   // Save memo
   const handleSaveMemo = () => {
     if (!memoSlot) return;
-    const existing = getAttendanceRecord(memoSlot.studentId, memoSlot.date);
+    const existing = attendance.find(r =>
+      r.studentId === memoSlot.studentId &&
+      r.date === memoSlot.date &&
+      r.startTime === memoSlot.startTime
+    );
     if (existing) {
       updateAttendance(existing.id, { memo: memoSlot.memo });
     }
@@ -297,10 +344,21 @@ export default function ScheduleGrid() {
       {/* Week Navigation */}
       <div className="flex items-center gap-3 mb-4">
         <button onClick={goToPrevWeek} className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-lg text-sm hover:bg-gray-50 text-gray-600">&lsaquo;</button>
-        <button onClick={goToThisWeek} className="px-3 py-1.5 bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-medium">이번주</button>
+        {isCurrentWeek ? (
+          <span className="px-3 py-1.5 bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-medium">
+            이번주
+          </span>
+        ) : (
+          <button onClick={goToThisWeek} className="px-3 py-1.5 bg-gray-100 text-gray-600 border border-gray-200 rounded-lg text-xs font-medium hover:bg-indigo-50 hover:text-indigo-600">
+            이번주로
+          </button>
+        )}
         <button onClick={goToNextWeek} className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-lg text-sm hover:bg-gray-50 text-gray-600">&rsaquo;</button>
         <span className="text-sm font-medium text-gray-700 ml-1">
-          {format(currentWeekStart, 'yyyy년 MM월 dd일', { locale: ko })} ~ {format(weekEnd, 'MM월 dd일', { locale: ko })}
+          {format(currentWeekStart, 'M월 d일', { locale: ko })} ~ {format(weekEnd, 'M월 d일', { locale: ko })}
+          {!isCurrentWeek && (
+            <span className="ml-2 text-xs text-indigo-500">({getWeekLabel()})</span>
+          )}
         </span>
       </div>
 
@@ -415,8 +473,8 @@ export default function ScheduleGrid() {
                     const leftPercent = slot.column * widthPercent;
                     const endTime = getEndTime(slot.startTime, slot.duration);
 
-                    // Attendance status for this block
-                    const attendanceRecord = !isTrial && student ? getAttendanceRecord(student.id, dateStr) : null;
+                    // Attendance status for this specific block (matched by startTime)
+                    const attendanceRecord = !isTrial && student ? getAttendanceRecord(student.id, dateStr, slot.startTime) : null;
                     const attendanceClass = attendanceRecord ? STATUS_COLORS[attendanceRecord.status] || '' : '';
                     const isAbsent = attendanceRecord?.status === '결석';
 
@@ -459,7 +517,16 @@ export default function ScheduleGrid() {
                             attendanceRecord.status === '출석' ? 'text-green-700' : attendanceRecord.status === '결석' ? 'text-red-600' : 'text-blue-700'
                           }`}>
                             {attendanceRecord.status}
-                            {attendanceRecord.memo && ' *'}
+                          </div>
+                        )}
+
+                        {/* Memo inline display */}
+                        {attendanceRecord?.memo && (
+                          <div
+                            className="text-[9px] text-gray-500 mt-0.5 truncate leading-tight"
+                            title={attendanceRecord.memo}
+                          >
+                            {attendanceRecord.memo}
                           </div>
                         )}
 
@@ -469,7 +536,10 @@ export default function ScheduleGrid() {
                             {(['출석', '결석', '보강'] as AttendanceStatus[]).map(status => (
                               <button
                                 key={status}
-                                onClick={(e) => { e.stopPropagation(); handleScheduleAttendance(student.id, day, status); }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleScheduleAttendance(student.id, day, status, slot.startTime, slot.duration as ClassDuration);
+                                }}
                                 className={`w-5 h-5 rounded-full text-[8px] font-bold transition-all ${
                                   attendanceRecord?.status === status
                                     ? status === '출석' ? 'bg-green-500 text-white' : status === '결석' ? 'bg-red-500 text-white' : 'bg-blue-500 text-white'
@@ -487,6 +557,7 @@ export default function ScheduleGrid() {
                                   slotId: slot.id,
                                   studentId: student.id,
                                   date: dateStr,
+                                  startTime: slot.startTime,
                                   memo: attendanceRecord?.memo || '',
                                 });
                               }}

@@ -103,6 +103,13 @@ export function useStore() {
     setStudents(prev => prev.map(s => s.id === id ? { ...s, active: false } : s));
   }, []);
 
+  const permanentDeleteStudent = useCallback((id: string) => {
+    setStudents(prev => prev.filter(s => s.id !== id));
+    setSchedules(prev => prev.filter(s => s.studentId !== id));
+    setAttendance(prev => prev.filter(a => a.studentId !== id));
+    setPayments(prev => prev.filter(p => p.studentId !== id));
+  }, []);
+
   // Schedule CRUD
   const addSchedule = useCallback((slot: Omit<ScheduleSlot, 'id'>) => {
     const newSlot: ScheduleSlot = { ...slot, id: uuidv4() };
@@ -351,7 +358,7 @@ export function useStore() {
 
   return {
     activeTab, setActiveTab,
-    students, addStudent, updateStudent, deleteStudent,
+    students, addStudent, updateStudent, deleteStudent, permanentDeleteStudent,
     schedules, addSchedule, updateSchedule, removeSchedule, moveSchedule,
     attendance, addAttendance, updateAttendance, deleteAttendance,
     payments, addPayment, updatePayment, deletePayment,

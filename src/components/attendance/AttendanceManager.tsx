@@ -1,5 +1,9 @@
-import { useState, useMemo } from 'react';
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval } from 'date-fns';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import {
+  format, startOfWeek, endOfWeek, addWeeks, subWeeks,
+  eachDayOfInterval, isSameDay, startOfMonth, endOfMonth,
+  getDay, subMonths, addMonths
+} from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useAppStore } from '../../store/StoreContext';
 import type { AttendanceStatus, DayOfWeek } from '../../types';
@@ -18,6 +22,9 @@ export default function AttendanceManager() {
     startOfWeek(new Date(), { weekStartsOn: 1 })
   );
   const [selectedStudent, setSelectedStudent] = useState<string>('all');
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date());
+  const calendarRef = useRef<HTMLDivElement>(null);
 
   const activeStudents = useMemo(() => students.filter(s => s.active), [students]);
 
@@ -25,25 +32,39 @@ export default function AttendanceManager() {
   const weekDays = eachDayOfInterval({ start: currentWeekStart, end: weekEnd })
     .filter(d => d.getDay() >= 2 && d.getDay() <= 6); // 화~토
 
+  const isCurrentWeek = startOfWeek(new Date(), { weekStartsOn: 1 }).getTime() === currentWeekStart.getTime();
+
   const goToPrevWeek = () => setCurrentWeekStart(prev => subWeeks(prev, 1));
   const goToNextWeek = () => setCurrentWeekStart(prev => addWeeks(prev, 1));
   const goToThisWeek = () => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }));
 
-  // Get attendance record for a student on a specific date
-  const getRecord = (studentId: string, date: string) => {
-    return attendance.find(r => r.studentId === studentId && r.date === date);
-  };
+  // Close calendar on outside click
+  useEffect(() => {
+    if (!showCalendar) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (calendarRef.current && !calendarRef.current.contains(e.target as Node)) {
+        setShowCalendar(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showCalendar]);
 
-  // Check if student is scheduled for a given day of week
-  const isScheduledDay = (studentId: string, dayOfWeek: DayOfWeek | null) => {
-    if (!dayOfWeek) return false;
+  // Get scheduled times for a student on a day
+  const getScheduledTimes = (studentId: string, dayOfWeek: DayOfWeek | null) => {
+    if (!dayOfWeek) return [];
     const student = activeStudents.find(s => s.id === studentId);
-    return (student?.regularSchedule || []).some(entry => entry.day === dayOfWeek);
+    return (student?.regularSchedule || []).filter(entry => entry.day === dayOfWeek);
   };
 
-  // Toggle attendance status
-  const handleStatusChange = (studentId: string, date: string, status: AttendanceStatus) => {
-    const existing = getRecord(studentId, date);
+  // Get attendance record for a student on a specific date + startTime
+  const getRecord = (studentId: string, date: string, startTime: string) => {
+    return attendance.find(r => r.studentId === studentId && r.date === date && r.startTime === startTime);
+  };
+
+  // Toggle attendance status per schedule slot
+  const handleStatusChange = (studentId: string, date: string, status: AttendanceStatus, startTime: string) => {
+    const existing = getRecord(studentId, date, startTime);
     const student = activeStudents.find(s => s.id === studentId);
     if (!student) return;
 
@@ -58,7 +79,7 @@ export default function AttendanceManager() {
         studentId,
         date,
         status,
-        startTime: (student.regularSchedule || []).find(entry => entry.day === getDayOfWeekFromDate(date))?.startTime || (student.regularSchedule || [])[0]?.startTime || '14:00',
+        startTime,
         duration: student.classDuration,
         isMakeup: status === '보강',
         memo: '',
@@ -84,6 +105,27 @@ export default function AttendanceManager() {
     ? activeStudents
     : activeStudents.filter(s => s.id === selectedStudent);
 
+  // Calendar generation
+  const calendarDays = useMemo(() => {
+    const monthStart = startOfMonth(calendarMonth);
+    const monthEnd = endOfMonth(calendarMonth);
+    const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
+    const startDayOfWeek = getDay(monthStart); // 0=Sun
+    const paddingDays: (Date | null)[] = Array(startDayOfWeek).fill(null);
+    return [...paddingDays, ...days];
+  }, [calendarMonth]);
+
+  // Week offset label
+  const getWeekLabel = () => {
+    if (isCurrentWeek) return null;
+    const now = startOfWeek(new Date(), { weekStartsOn: 1 });
+    const diff = Math.round((currentWeekStart.getTime() - now.getTime()) / (7 * 24 * 60 * 60 * 1000));
+    if (diff === -1) return '지난주';
+    if (diff === 1) return '다음주';
+    if (diff < 0) return `${Math.abs(diff)}주 전`;
+    return `${diff}주 후`;
+  };
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
@@ -91,13 +133,99 @@ export default function AttendanceManager() {
       </div>
 
       {/* Week Navigation */}
-      <div className="flex items-center gap-3 mb-4">
-        <button onClick={goToPrevWeek} className="px-3 py-1 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">&lsaquo; 이전주</button>
-        <button onClick={goToThisWeek} className="px-3 py-1 bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-sm font-medium">이번주</button>
-        <button onClick={goToNextWeek} className="px-3 py-1 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">다음주 &rsaquo;</button>
-        <span className="text-sm font-medium text-gray-700 ml-2">
-          {format(currentWeekStart, 'yyyy년 MM월 dd일', { locale: ko })} ~ {format(weekEnd, 'MM월 dd일', { locale: ko })}
-        </span>
+      <div className="flex items-center gap-3 mb-4 relative">
+        <button onClick={goToPrevWeek} className="px-3 py-1 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">&lsaquo;</button>
+        {isCurrentWeek ? (
+          <span className="px-3 py-1 bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-sm font-medium">
+            이번주
+          </span>
+        ) : (
+          <button onClick={goToThisWeek} className="px-3 py-1 bg-gray-100 text-gray-600 border border-gray-200 rounded-lg text-sm font-medium hover:bg-indigo-50 hover:text-indigo-600">
+            이번주로
+          </button>
+        )}
+        <button onClick={goToNextWeek} className="px-3 py-1 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">&rsaquo;</button>
+
+        {/* Clickable date range → opens calendar */}
+        <div className="relative" ref={calendarRef}>
+          <button
+            onClick={() => {
+              setCalendarMonth(currentWeekStart);
+              setShowCalendar(!showCalendar);
+            }}
+            className="text-sm font-medium text-gray-700 hover:text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded transition-colors cursor-pointer"
+          >
+            {format(currentWeekStart, 'yyyy년 M월 d일', { locale: ko })} ~ {format(weekEnd, 'M월 d일', { locale: ko })}
+            {!isCurrentWeek && (
+              <span className="ml-2 text-xs text-indigo-500 font-normal">({getWeekLabel()})</span>
+            )}
+          </button>
+
+          {/* Calendar Popup */}
+          {showCalendar && (
+            <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg p-4 z-50 w-[280px]">
+              <div className="flex items-center justify-between mb-3">
+                <button
+                  onClick={() => setCalendarMonth(prev => subMonths(prev, 1))}
+                  className="w-7 h-7 flex items-center justify-center rounded hover:bg-gray-100 text-gray-600"
+                >
+                  &lsaquo;
+                </button>
+                <span className="text-sm font-semibold text-gray-800">
+                  {format(calendarMonth, 'yyyy년 M월', { locale: ko })}
+                </span>
+                <button
+                  onClick={() => setCalendarMonth(prev => addMonths(prev, 1))}
+                  className="w-7 h-7 flex items-center justify-center rounded hover:bg-gray-100 text-gray-600"
+                >
+                  &rsaquo;
+                </button>
+              </div>
+              <div className="grid grid-cols-7 gap-0.5 text-xs mb-1">
+                {['일', '월', '화', '수', '목', '금', '토'].map(d => (
+                  <div key={d} className="text-center text-gray-400 font-medium py-1">{d}</div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-0.5 text-xs">
+                {calendarDays.map((day, i) => {
+                  if (!day) return <div key={`pad-${i}`} className="w-8 h-8" />;
+                  const dayWeekStart = startOfWeek(day, { weekStartsOn: 1 });
+                  const isSelectedWeek = dayWeekStart.getTime() === currentWeekStart.getTime();
+                  const isToday = isSameDay(day, new Date());
+                  return (
+                    <button
+                      key={day.toISOString()}
+                      onClick={() => {
+                        setCurrentWeekStart(dayWeekStart);
+                        setShowCalendar(false);
+                      }}
+                      className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
+                        isSelectedWeek
+                          ? 'bg-indigo-100 text-indigo-700 font-bold'
+                          : isToday
+                          ? 'bg-amber-50 text-amber-700 font-semibold ring-1 ring-amber-300'
+                          : 'hover:bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      {format(day, 'd')}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-2 pt-2 border-t border-gray-100 flex justify-center">
+                <button
+                  onClick={() => {
+                    setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }));
+                    setShowCalendar(false);
+                  }}
+                  className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                >
+                  오늘로 이동
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Student filter */}
@@ -126,7 +254,9 @@ export default function AttendanceManager() {
                 잔여
               </th>
               {weekDays.map(day => (
-                <th key={day.toISOString()} className="border-b border-r border-gray-200 px-3 py-3 text-xs font-medium text-gray-500 text-center min-w-[100px]">
+                <th key={day.toISOString()} className={`border-b border-r border-gray-200 px-3 py-3 text-xs font-medium text-gray-500 text-center min-w-[100px] ${
+                  isSameDay(day, new Date()) ? 'bg-indigo-50' : ''
+                }`}>
                   <div>{format(day, 'EEE', { locale: ko })}</div>
                   <div className="text-gray-400">{format(day, 'MM/dd')}</div>
                 </th>
@@ -141,10 +271,20 @@ export default function AttendanceManager() {
               const summary = getStudentSummary(student.id);
               const weekRecords = weekDays.map(day => {
                 const dateStr = format(day, 'yyyy-MM-dd');
-                return { date: dateStr, record: getRecord(student.id, dateStr), dayOfWeek: getDayOfWeekFromDate(dateStr) };
+                const dayOfWeek = getDayOfWeekFromDate(dateStr);
+                const scheduledTimes = getScheduledTimes(student.id, dayOfWeek);
+                const records = scheduledTimes.map(entry => ({
+                  startTime: entry.startTime,
+                  record: getRecord(student.id, dateStr, entry.startTime),
+                }));
+                return { date: dateStr, dayOfWeek, scheduledTimes, records };
               });
-              const weekPresent = weekRecords.filter(r => r.record?.status === '출석' || r.record?.status === '보강').length;
-              const weekAbsent = weekRecords.filter(r => r.record?.status === '결석').length;
+              const weekPresent = weekRecords.reduce((acc, r) =>
+                acc + r.records.filter(rec => rec.record?.status === '출석' || rec.record?.status === '보강').length, 0
+              );
+              const weekAbsent = weekRecords.reduce((acc, r) =>
+                acc + r.records.filter(rec => rec.record?.status === '결석').length, 0
+              );
 
               return (
                 <tr key={student.id} className="hover:bg-gray-50/50">
@@ -160,29 +300,41 @@ export default function AttendanceManager() {
                   {weekDays.map(day => {
                     const dateStr = format(day, 'yyyy-MM-dd');
                     const dayOfWeek = getDayOfWeekFromDate(dateStr);
-                    const isScheduled = isScheduledDay(student.id, dayOfWeek);
-                    const record = getRecord(student.id, dateStr);
+                    const scheduledTimes = getScheduledTimes(student.id, dayOfWeek);
+                    const isToday = isSameDay(day, new Date());
 
                     return (
                       <td key={dateStr} className={`border-r border-gray-100 px-2 py-2 text-center ${
-                        isScheduled ? 'bg-indigo-50/30' : ''
-                      }`}>
-                        {(isScheduled || record) ? (
-                          <div className="flex gap-1 justify-center">
-                            {STATUS_OPTIONS.map(opt => (
-                              <button
-                                key={opt.value}
-                                onClick={() => handleStatusChange(student.id, dateStr, opt.value)}
-                                className={`w-7 h-7 rounded-full text-[10px] font-medium transition-all ${
-                                  record?.status === opt.value
-                                    ? `${opt.color} text-white shadow-sm scale-110`
-                                    : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
-                                }`}
-                                title={opt.label}
-                              >
-                                {opt.label[0]}
-                              </button>
-                            ))}
+                        scheduledTimes.length > 0 ? 'bg-indigo-50/30' : ''
+                      } ${isToday ? 'bg-indigo-50/50' : ''}`}>
+                        {scheduledTimes.length > 0 ? (
+                          <div className={`flex flex-col ${scheduledTimes.length > 1 ? 'gap-1.5' : 'gap-0'}`}>
+                            {scheduledTimes.map(entry => {
+                              const record = getRecord(student.id, dateStr, entry.startTime);
+                              return (
+                                <div key={entry.startTime}>
+                                  {scheduledTimes.length > 1 && (
+                                    <div className="text-[9px] text-gray-400 mb-0.5">{entry.startTime}</div>
+                                  )}
+                                  <div className="flex gap-1 justify-center">
+                                    {STATUS_OPTIONS.map(opt => (
+                                      <button
+                                        key={opt.value}
+                                        onClick={() => handleStatusChange(student.id, dateStr, opt.value, entry.startTime)}
+                                        className={`w-7 h-7 rounded-full text-[10px] font-medium transition-all ${
+                                          record?.status === opt.value
+                                            ? `${opt.color} text-white shadow-sm scale-110`
+                                            : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                                        }`}
+                                        title={opt.label}
+                                      >
+                                        {opt.label[0]}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         ) : (
                           <span className="text-xs text-gray-300">-</span>
@@ -213,7 +365,9 @@ export default function AttendanceManager() {
       {/* Attendance Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <h4 className="text-sm font-medium text-gray-500 mb-2">이번주 출석률</h4>
+          <h4 className="text-sm font-medium text-gray-500 mb-2">
+            {isCurrentWeek ? '이번주' : format(currentWeekStart, 'M/d', { locale: ko }) + '주'} 출석률
+          </h4>
           {(() => {
             const weekDateStrs = weekDays.map(d => format(d, 'yyyy-MM-dd'));
             const weekAttendance = attendance.filter(r => weekDateStrs.includes(r.date));
