@@ -245,6 +245,77 @@ export async function testConnection(config: FirebaseConfig, room: string): Prom
   }
 }
 
+/** Upload JSON backup data directly to Firestore (bypasses all sync logic) */
+export async function uploadJsonToCloud(
+  jsonData: Record<string, unknown>,
+  config?: FirebaseConfig,
+  room?: string
+): Promise<{ success: boolean; message: string }> {
+  const useConfig = config || getSyncConfig();
+  const useRoom = room || getSyncRoom();
+  if (!useConfig || !useRoom) {
+    return { success: false, message: 'Firebase 설정 또는 방 이름이 없습니다.' };
+  }
+
+  let uploadApp: FirebaseApp | null = null;
+  try {
+    // Use a separate app instance to avoid interfering with sync
+    const existing = getApps().find(a => a.name === 'json-upload');
+    if (existing) await deleteApp(existing);
+
+    uploadApp = initializeApp(useConfig, 'json-upload');
+    const uploadDb = getFirestore(uploadApp);
+
+    // Build the cloud document from JSON data
+    const cloudDoc: Record<string, string> = {
+      _updatedAt: new Date().toISOString(),
+    };
+
+    // Support both old format (short keys) and new format (full keys)
+    const keyMap: Record<string, string> = {
+      students: 'seocho_students', schedules: 'seocho_schedules',
+      attendance: 'seocho_attendance', payments: 'seocho_payments',
+      holidays: 'seocho_holidays', settings: 'seocho_settings',
+    };
+
+    // New format (full storage keys)
+    ALL_STORAGE_KEYS.forEach(key => {
+      if (jsonData[key] != null) {
+        cloudDoc[key] = typeof jsonData[key] === 'string'
+          ? jsonData[key] as string
+          : JSON.stringify(jsonData[key]);
+      }
+    });
+
+    // Old format (short keys) as fallback
+    Object.entries(keyMap).forEach(([shortKey, fullKey]) => {
+      if (jsonData[shortKey] != null && !cloudDoc[fullKey]) {
+        cloudDoc[fullKey] = typeof jsonData[shortKey] === 'string'
+          ? jsonData[shortKey] as string
+          : JSON.stringify(jsonData[shortKey]);
+      }
+    });
+
+    const hasData = ALL_STORAGE_KEYS.some(key => cloudDoc[key] !== undefined);
+    if (!hasData) {
+      await deleteApp(uploadApp);
+      return { success: false, message: 'JSON 파일에 유효한 데이터가 없습니다.' };
+    }
+
+    const docRef = doc(uploadDb, 'academies', useRoom);
+    await setDoc(docRef, cloudDoc);
+    await deleteApp(uploadApp);
+
+    return { success: true, message: '클라우드에 업로드 완료!' };
+  } catch (e) {
+    if (uploadApp) {
+      try { await deleteApp(uploadApp); } catch { /* ignore */ }
+    }
+    const msg = e instanceof Error ? e.message : String(e);
+    return { success: false, message: `업로드 실패: ${msg}` };
+  }
+}
+
 /** Full setup: save config, enable sync, start listening */
 export async function setupSync(
   config: FirebaseConfig,

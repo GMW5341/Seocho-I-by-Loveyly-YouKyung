@@ -6,7 +6,7 @@ import { DAYS_OF_WEEK, formatCurrency } from '../../utils/helpers';
 import {
   getSyncConfig, getSyncRoom, isSyncEnabled as checkSyncEnabled,
   setupSync, stopSync, setSyncEnabled, pushToCloud, generateSyncUrl,
-  type FirebaseConfig,
+  uploadJsonToCloud, type FirebaseConfig,
 } from '../../services/firebaseSync';
 
 export default function SettingsPage() {
@@ -434,6 +434,29 @@ export default function SettingsPage() {
               >
                 수동 업로드
               </button>
+              <label className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 cursor-pointer">
+                JSON → 클라우드
+                <input type="file" accept=".json" className="hidden" onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  e.target.value = '';
+                  setSyncStatus('connecting');
+                  setSyncMessage('JSON 파일 업로드 중...');
+                  try {
+                    const text = await file.text();
+                    const jsonData = JSON.parse(text);
+                    const result = await uploadJsonToCloud(jsonData);
+                    setSyncStatus(result.success ? 'connected' : 'error');
+                    setSyncMessage(result.message);
+                    if (result.success) {
+                      setTimeout(() => setSyncMessage(''), 5000);
+                    }
+                  } catch {
+                    setSyncStatus('error');
+                    setSyncMessage('JSON 파일을 읽을 수 없습니다.');
+                  }
+                }} />
+              </label>
               <button
                 onClick={() => setShowSyncSetup(true)}
                 className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200"
