@@ -59,16 +59,18 @@ export default function SettingsPage() {
     }
   };
 
+  const ALL_STORAGE_KEYS = [
+    'seocho_students', 'seocho_schedules', 'seocho_attendance', 'seocho_payments',
+    'seocho_holidays', 'seocho_settings', 'seocho_trial_students', 'seocho_trial_lessons',
+    'seocho_curriculum', 'seocho_message_templates', 'seocho_special_classes',
+    'seocho_special_class_students', 'seocho_logo',
+  ];
+
   const handleExportData = () => {
-    const data = {
-      students: localStorage.getItem('seocho_students'),
-      schedules: localStorage.getItem('seocho_schedules'),
-      attendance: localStorage.getItem('seocho_attendance'),
-      payments: localStorage.getItem('seocho_payments'),
-      holidays: localStorage.getItem('seocho_holidays'),
-      settings: localStorage.getItem('seocho_settings'),
-      exportDate: new Date().toISOString(),
-    };
+    const data: Record<string, string | null> = { exportDate: new Date().toISOString() };
+    ALL_STORAGE_KEYS.forEach(key => {
+      data[key] = localStorage.getItem(key);
+    });
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -85,13 +87,32 @@ export default function SettingsPage() {
     reader.onload = (event) => {
       try {
         const data = JSON.parse(event.target?.result as string);
-        if (data.students) localStorage.setItem('seocho_students', data.students);
-        if (data.schedules) localStorage.setItem('seocho_schedules', data.schedules);
-        if (data.attendance) localStorage.setItem('seocho_attendance', data.attendance);
-        if (data.payments) localStorage.setItem('seocho_payments', data.payments);
-        if (data.holidays) localStorage.setItem('seocho_holidays', data.holidays);
-        if (data.settings) localStorage.setItem('seocho_settings', data.settings);
-        window.location.reload();
+        // Support both old format (short keys) and new format (full keys)
+        const keyMap: Record<string, string> = {
+          students: 'seocho_students', schedules: 'seocho_schedules',
+          attendance: 'seocho_attendance', payments: 'seocho_payments',
+          holidays: 'seocho_holidays', settings: 'seocho_settings',
+        };
+        let imported = false;
+        // Import new format (full storage keys)
+        ALL_STORAGE_KEYS.forEach(key => {
+          if (data[key] != null) {
+            localStorage.setItem(key, data[key]);
+            imported = true;
+          }
+        });
+        // Import old format (short keys) as fallback
+        Object.entries(keyMap).forEach(([shortKey, fullKey]) => {
+          if (data[shortKey] != null && !data[fullKey]) {
+            localStorage.setItem(fullKey, data[shortKey]);
+            imported = true;
+          }
+        });
+        if (imported) {
+          window.location.reload();
+        } else {
+          alert('백업 파일에 복원할 데이터가 없습니다.');
+        }
       } catch {
         alert('올바르지 않은 파일 형식입니다.');
       }
@@ -341,14 +362,15 @@ export default function SettingsPage() {
       {/* Data Management */}
       <section className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
         <h4 className="text-sm font-semibold text-gray-700 mb-3">데이터 관리</h4>
-        <div className="flex gap-3">
+        <p className="text-xs text-gray-400 mb-3">PC와 모바일 간 데이터를 이동하려면 백업 후 가져오기를 사용하세요.</p>
+        <div className="flex flex-wrap gap-2 md:gap-3">
           <button
             onClick={handleExportData}
             className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700"
           >
             데이터 백업 (내보내기)
           </button>
-          <label className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 cursor-pointer">
+          <label className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 cursor-pointer text-center">
             데이터 복원 (가져오기)
             <input type="file" accept=".json" onChange={handleImportData} className="hidden" />
           </label>
