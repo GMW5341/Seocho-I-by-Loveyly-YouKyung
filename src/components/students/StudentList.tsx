@@ -98,6 +98,7 @@ export default function StudentList() {
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">이름</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">나이/학년</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">반</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">수업시간</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">수업요일</th>
@@ -112,6 +113,7 @@ export default function StudentList() {
               return (
                 <tr key={student.id} className={`hover:bg-gray-50 ${!student.active ? 'opacity-50' : ''}`}>
                   <td className="px-4 py-3 text-sm font-medium text-gray-900">{student.name}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{student.grade || '-'}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${getClassLevelColor(student.level)}`}>
                       {student.level}
@@ -154,7 +156,7 @@ export default function StudentList() {
             })}
             {filteredStudents.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-sm text-gray-400">
+                <td colSpan={8} className="px-4 py-12 text-center text-sm text-gray-400">
                   등록된 원생이 없습니다.
                 </td>
               </tr>

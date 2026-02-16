@@ -4,6 +4,8 @@ export type ClassDuration = 60 | 80 | 100;
 
 export type ClassLevel = '유아반' | '초등(저학년)' | '초등(고학년)';
 
+export type StudentGrade = '6세' | '7세' | '초등1' | '초등2' | '초등3' | '초등4' | '초등5' | '초등6';
+
 export type PaymentMethod = '계좌이체' | '현금' | '카드' | '온누리상품권' | '기타';
 
 export type AttendanceStatus = '출석' | '결석' | '보강' | '예정';
@@ -13,6 +15,7 @@ export type SeasonType = '학기중' | '방학중';
 export interface Student {
   id: string;
   name: string;
+  grade: StudentGrade;
   level: ClassLevel;
   classDuration: ClassDuration;
   sessionsPerWeek: number; // 주 1회 or 2회

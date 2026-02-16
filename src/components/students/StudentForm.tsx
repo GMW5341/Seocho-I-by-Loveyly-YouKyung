@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Student, ClassDuration, ClassLevel, DayOfWeek } from '../../types';
+import type { Student, ClassDuration, ClassLevel, StudentGrade, DayOfWeek } from '../../types';
 import { DAYS_OF_WEEK } from '../../utils/helpers';
 
 interface StudentFormProps {
@@ -8,11 +8,13 @@ interface StudentFormProps {
   onCancel: () => void;
 }
 
+const STUDENT_GRADES: StudentGrade[] = ['6세', '7세', '초등1', '초등2', '초등3', '초등4', '초등5', '초등6'];
 const CLASS_LEVELS: ClassLevel[] = ['유아반', '초등(저학년)', '초등(고학년)'];
 const CLASS_DURATIONS: ClassDuration[] = [60, 80, 100];
 
 export default function StudentForm({ student, onSubmit, onCancel }: StudentFormProps) {
   const [name, setName] = useState(student?.name || '');
+  const [grade, setGrade] = useState<StudentGrade>(student?.grade || '6세');
   const [level, setLevel] = useState<ClassLevel>(student?.level || '유아반');
   const [classDuration, setClassDuration] = useState<ClassDuration>(student?.classDuration || 60);
   const [sessionsPerWeek, setSessionsPerWeek] = useState(student?.sessionsPerWeek || 1);
@@ -51,6 +53,7 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
     if (!name.trim()) return;
     onSubmit({
       name: name.trim(),
+      grade,
       level,
       classDuration,
       sessionsPerWeek,
@@ -74,6 +77,26 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
           placeholder="원생 이름"
           required
         />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">나이/학년</label>
+        <div className="flex flex-wrap gap-2">
+          {STUDENT_GRADES.map(g => (
+            <button
+              type="button"
+              key={g}
+              onClick={() => setGrade(g)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${
+                grade === g
+                  ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                  : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {g}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
