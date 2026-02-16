@@ -1,20 +1,72 @@
-import { useState, useMemo } from 'react';
-import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+import { useState, useMemo, useCallback } from 'react';
+import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, startOfWeek, addDays } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useAppStore } from '../../store/StoreContext';
-import type { PaymentMethod, ClassDuration } from '../../types';
+import type { PaymentMethod, ClassDuration, DayOfWeek, StudentGrade } from '../../types';
 import { TRIAL_PRICING } from '../../types';
 import { formatCurrency } from '../../utils/helpers';
 import Badge from '../common/Badge';
 import Modal from '../common/Modal';
+import TrialForm from '../schedule/TrialForm';
 
 const PAYMENT_METHODS: PaymentMethod[] = ['계좌이체', '현금', '카드', '온누리상품권', '기타'];
 
 export default function TrialManager() {
-  const { trialStudents, trialLessons, updateTrialLesson, deleteTrialStudent } = useAppStore();
+  const { trialStudents, trialLessons, updateTrialLesson, deleteTrialStudent, addTrialStudent, addTrialLesson, addSchedule } = useAppStore();
   const [payingLessonId, setPayingLessonId] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('계좌이체');
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const [showTrialForm, setShowTrialForm] = useState(false);
+
+  // Calculate the next occurrence of a given day of week from today
+  const getNextDateForDay = useCallback((day: DayOfWeek): string => {
+    const dayMap: Record<DayOfWeek, number> = { '월': 0, '화': 1, '수': 2, '목': 3, '금': 4, '토': 5 };
+    const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+    const targetDate = addDays(weekStart, dayMap[day]);
+    // If target date is in the past, use next week
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (targetDate < today) {
+      return format(addDays(targetDate, 7), 'yyyy-MM-dd');
+    }
+    return format(targetDate, 'yyyy-MM-dd');
+  }, []);
+
+  const handleAddTrial = useCallback((data: {
+    name: string;
+    grade: StudentGrade;
+    parentPhone: string;
+    memo: string;
+    dayOfWeek: DayOfWeek;
+    startTime: string;
+    duration: ClassDuration;
+  }) => {
+    const trialStudent = addTrialStudent({
+      name: data.name,
+      grade: data.grade,
+      parentPhone: data.parentPhone,
+      memo: data.memo,
+    });
+    addTrialLesson({
+      trialStudentId: trialStudent.id,
+      dayOfWeek: data.dayOfWeek,
+      startTime: data.startTime,
+      duration: data.duration,
+      paid: false,
+      amount: TRIAL_PRICING[data.duration],
+    });
+    addSchedule({
+      studentId: '',
+      dayOfWeek: data.dayOfWeek,
+      startTime: data.startTime,
+      duration: data.duration,
+      isRegular: false,
+      isTrial: true,
+      trialStudentId: trialStudent.id,
+      date: getNextDateForDay(data.dayOfWeek),
+    });
+    setShowTrialForm(false);
+  }, [addTrialStudent, addTrialLesson, addSchedule, getNextDateForDay]);
 
   const trialData = useMemo(() => {
     return trialStudents.map(student => {
@@ -59,6 +111,12 @@ export default function TrialManager() {
           <h3 className="text-lg font-bold text-gray-800">체험 수업 관리</h3>
           <p className="text-sm text-gray-500">체험 수업 신청 학생 목록 및 결제 관리</p>
         </div>
+        <button
+          onClick={() => setShowTrialForm(true)}
+          className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors whitespace-nowrap"
+        >
+          + 체험 수업 등록
+        </button>
       </div>
 
       {/* Stats */}
@@ -175,13 +233,21 @@ export default function TrialManager() {
             {trialData.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-4 py-12 text-center text-sm text-gray-400">
-                  체험 수업 기록이 없습니다. 스케줄 관리에서 체험 수업을 추가하세요.
+                  체험 수업 기록이 없습니다. 위의 &quot;+ 체험 수업 등록&quot; 버튼을 눌러 추가하세요.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {/* Trial Form Modal */}
+      <Modal isOpen={showTrialForm} onClose={() => setShowTrialForm(false)} title="체험 수업 등록">
+        <TrialForm
+          onSubmit={handleAddTrial}
+          onCancel={() => setShowTrialForm(false)}
+        />
+      </Modal>
 
       {/* Payment Modal */}
       <Modal isOpen={!!payingLessonId} onClose={() => setPayingLessonId(null)} title="체험 수업 결제">

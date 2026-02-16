@@ -118,33 +118,34 @@ async function writeCloudData(
   kvData: Record<string, string>,
 ): Promise<string> {
   const updatedAt = new Date().toISOString();
-
-  // Firestore batch limit is 500 ops; we won't exceed that with ~13 keys + chunks
-  const batch = writeBatch(firestore);
-
-  // Metadata document
   const roomRef = doc(firestore, 'academies', room);
-  batch.set(roomRef, { _updatedAt: updatedAt, _version: 2 });
 
+  // Write each key in its own batch to avoid Firestore 10MB batch size limit.
+  // Large keys (e.g. curriculum with base64 images) could exceed the limit
+  // if combined with other data in a single batch.
   for (const key of ALL_STORAGE_KEYS) {
     const val = kvData[key];
     if (val === undefined || val === '') continue;
 
+    const keyBatch = writeBatch(firestore);
     const keyRef = doc(firestore, 'academies', room, DATA_SUB, key);
 
     if (byteLen(val) <= MAX_FIELD_BYTES) {
-      batch.set(keyRef, { v: val });
+      keyBatch.set(keyRef, { v: val });
     } else {
       const chunks = chunkString(val, MAX_FIELD_BYTES);
-      batch.set(keyRef, { _chunked: true, _count: chunks.length });
+      keyBatch.set(keyRef, { _chunked: true, _count: chunks.length });
       for (let i = 0; i < chunks.length; i++) {
         const chunkRef = doc(firestore, 'academies', room, DATA_SUB, `${key}__${i}`);
-        batch.set(chunkRef, { v: chunks[i] });
+        keyBatch.set(chunkRef, { v: chunks[i] });
       }
     }
+
+    await keyBatch.commit();
   }
 
-  await batch.commit();
+  // Write metadata document last (after all data keys succeed)
+  await setDoc(roomRef, { _updatedAt: updatedAt, _version: 2 });
   return updatedAt;
 }
 

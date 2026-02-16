@@ -223,7 +223,7 @@ export default function ScheduleGrid() {
       duration: number; isRegular: boolean; isSpecialClass: boolean;
       specialClassName: string; specialClassStudentCount: number;
     }> = [];
-    specialClasses.filter(c => c.active && c.startDate <= weekEndStr && c.endDate >= weekStartStr).forEach(cls => {
+    specialClasses.filter(c => c.active && (!c.startDate || c.startDate <= weekEndStr) && (!c.endDate || c.endDate >= weekStartStr)).forEach(cls => {
       const count = specialClassStudents.filter(s => s.specialClassId === cls.id).length;
       cls.schedule.forEach((entry, i) => {
         virtualSlots.push({
