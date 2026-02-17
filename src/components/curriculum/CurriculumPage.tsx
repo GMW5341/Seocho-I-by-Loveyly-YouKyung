@@ -1,8 +1,9 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { useAppStore } from '../../store/StoreContext';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { ClassLevel, CurriculumFile } from '../../types';
+import { getAllCurriculumImages } from '../../services/curriculumImageStore';
 
 const CLASS_LEVELS: { level: ClassLevel; label: string; color: string; bgColor: string; borderColor: string }[] = [
   { level: '유아반', label: '유아반', color: 'text-pink-700', bgColor: 'bg-pink-50', borderColor: 'border-pink-300' },
@@ -10,7 +11,7 @@ const CLASS_LEVELS: { level: ClassLevel; label: string; color: string; bgColor: 
   { level: '초등(고학년)', label: '초등 고학년반', color: 'text-green-700', bgColor: 'bg-green-50', borderColor: 'border-green-300' },
 ];
 
-function compressImage(dataUrl: string, maxWidth = 1600, quality = 0.8): Promise<string> {
+function compressImage(dataUrl: string, maxWidth = 800, quality = 0.5): Promise<string> {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
@@ -45,6 +46,17 @@ export default function CurriculumPage() {
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [zoomedFile, setZoomedFile] = useState<CurriculumFile | null>(null);
   const [fileDraggingLevel, setFileDraggingLevel] = useState<ClassLevel | null>(null);
+  const [imageMap, setImageMap] = useState<Record<string, string>>({});
+
+  // Load images from IndexedDB on mount and when curriculum changes
+  useEffect(() => {
+    getAllCurriculumImages().then(setImageMap).catch(console.error);
+  }, [curriculum]);
+
+  // Helper: get dataUrl from in-memory state or IndexedDB cache
+  const getDataUrl = useCallback((file: CurriculumFile) => {
+    return file.dataUrl || imageMap[file.id] || '';
+  }, [imageMap]);
 
   // Internal drag state
   const [dragSourceId, setDragSourceId] = useState<string | null>(null);
@@ -313,7 +325,7 @@ export default function CurriculumPage() {
                               onClick={() => setZoomedFile(currentFile)}
                             >
                               <img
-                                src={currentFile.dataUrl}
+                                src={getDataUrl(currentFile)}
                                 alt={currentFile.name}
                                 className="w-full max-h-[500px] object-contain bg-gray-50 transition-transform duration-300 hover:scale-105"
                                 onError={(e) => {
@@ -326,7 +338,7 @@ export default function CurriculumPage() {
                           ) : (
                             <div className="cursor-pointer" onClick={() => setZoomedFile(currentFile)}>
                               <iframe
-                                src={currentFile.dataUrl}
+                                src={getDataUrl(currentFile)}
                                 title={currentFile.name}
                                 className="w-full h-[400px] pointer-events-none"
                               />
@@ -364,7 +376,7 @@ export default function CurriculumPage() {
                             >
                               {file.type === 'image' ? (
                                 <img
-                                  src={file.dataUrl}
+                                  src={getDataUrl(file)}
                                   alt={file.name}
                                   className="w-full h-20 object-cover"
                                   onError={(e) => {
@@ -426,13 +438,13 @@ export default function CurriculumPage() {
 
             {zoomedFile.type === 'image' ? (
               <img
-                src={zoomedFile.dataUrl}
+                src={getDataUrl(zoomedFile)}
                 alt={zoomedFile.name}
                 className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
               />
             ) : (
               <iframe
-                src={zoomedFile.dataUrl}
+                src={getDataUrl(zoomedFile)}
                 title={zoomedFile.name}
                 className="w-[90vw] h-[90vh] rounded-lg bg-white"
               />

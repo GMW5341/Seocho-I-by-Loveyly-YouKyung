@@ -7,6 +7,7 @@ import type {
 } from '../types';
 import { DEFAULT_SETTINGS } from '../utils/helpers';
 import { pushToCloud, isSyncEnabled, startRealtimeSync, hasReceivedInitialSnapshot } from '../services/firebaseSync';
+import { saveCurriculumImage, deleteCurriculumImage } from '../services/curriculumImageStore';
 
 const STORAGE_KEYS = {
   students: 'seocho_students',
@@ -34,7 +35,11 @@ function loadFromStorage<T>(key: string, fallback: T): T {
 }
 
 function saveToStorage<T>(key: string, data: T): void {
-  localStorage.setItem(key, JSON.stringify(data));
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch (e) {
+    console.error(`localStorage save failed for ${key}:`, e);
+  }
 }
 
 export function useStore() {
@@ -73,7 +78,16 @@ export function useStore() {
   const [settings, setSettings] = useState<AcademySettings>(() => loadFromStorage(STORAGE_KEYS.settings, DEFAULT_SETTINGS));
   const [trialStudents, setTrialStudents] = useState<TrialStudent[]>(() => loadFromStorage(STORAGE_KEYS.trialStudents, []));
   const [trialLessons, setTrialLessons] = useState<TrialLesson[]>(() => loadFromStorage(STORAGE_KEYS.trialLessons, []));
-  const [curriculum, setCurriculum] = useState<CurriculumFile[]>(() => loadFromStorage(STORAGE_KEYS.curriculum, []));
+  const [curriculum, setCurriculum] = useState<CurriculumFile[]>(() => {
+    const loaded = loadFromStorage<CurriculumFile[]>(STORAGE_KEYS.curriculum, []);
+    // Migrate existing dataUrls to IndexedDB (one-time)
+    loaded.forEach(f => {
+      if (f.dataUrl) {
+        saveCurriculumImage(f.id, f.dataUrl).catch(console.error);
+      }
+    });
+    return loaded;
+  });
   const [messageTemplates, setMessageTemplates] = useState<MessageTemplate[]>(() => loadFromStorage(STORAGE_KEYS.messageTemplates, []));
   const [specialClasses, setSpecialClasses] = useState<SpecialClass[]>(() => loadFromStorage(STORAGE_KEYS.specialClasses, []));
   const [specialClassStudents, setSpecialClassStudents] = useState<SpecialClassStudent[]>(() => loadFromStorage(STORAGE_KEYS.specialClassStudents, []));
@@ -114,7 +128,17 @@ export function useStore() {
   useEffect(() => { saveToStorage(STORAGE_KEYS.settings, settings); scheduleCloudPush(); }, [settings, scheduleCloudPush]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.trialStudents, trialStudents); scheduleCloudPush(); }, [trialStudents, scheduleCloudPush]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.trialLessons, trialLessons); scheduleCloudPush(); }, [trialLessons, scheduleCloudPush]);
-  useEffect(() => { saveToStorage(STORAGE_KEYS.curriculum, curriculum); scheduleCloudPush(); }, [curriculum, scheduleCloudPush]);
+  useEffect(() => {
+    // Save new images to IndexedDB, then store only metadata in localStorage
+    curriculum.forEach(f => {
+      if (f.dataUrl) {
+        saveCurriculumImage(f.id, f.dataUrl).catch(console.error);
+      }
+    });
+    const metadata = curriculum.map(({ dataUrl: _du, ...rest }) => ({ ...rest, dataUrl: '' }));
+    saveToStorage(STORAGE_KEYS.curriculum, metadata);
+    scheduleCloudPush();
+  }, [curriculum, scheduleCloudPush]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.messageTemplates, messageTemplates); scheduleCloudPush(); }, [messageTemplates, scheduleCloudPush]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.specialClasses, specialClasses); scheduleCloudPush(); }, [specialClasses, scheduleCloudPush]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.specialClassStudents, specialClassStudents); scheduleCloudPush(); }, [specialClassStudents, scheduleCloudPush]);
@@ -368,6 +392,7 @@ export function useStore() {
 
   const deleteCurriculumFile = useCallback((id: string) => {
     setCurriculum(prev => prev.filter(f => f.id !== id));
+    deleteCurriculumImage(id).catch(console.error);
   }, []);
 
   // Message Template CRUD

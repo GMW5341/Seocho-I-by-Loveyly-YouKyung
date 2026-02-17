@@ -31,6 +31,7 @@ let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
 let unsubscribe: Unsubscribe | null = null;
 let lastPushTimestamp = '';
+let pushInProgress = false;
 let initialSnapshotReceived = false;
 
 // ─── Helpers ───────────────────────────────────────────────
@@ -116,8 +117,9 @@ async function writeCloudData(
   firestore: Firestore,
   room: string,
   kvData: Record<string, string>,
+  updatedAt?: string,
 ): Promise<string> {
-  const updatedAt = new Date().toISOString();
+  const ts = updatedAt || new Date().toISOString();
   const roomRef = doc(firestore, 'academies', room);
 
   // Write each key in its own batch to avoid Firestore 10MB batch size limit.
@@ -145,8 +147,8 @@ async function writeCloudData(
   }
 
   // Write metadata document last (after all data keys succeed)
-  await setDoc(roomRef, { _updatedAt: updatedAt, _version: 2 });
-  return updatedAt;
+  await setDoc(roomRef, { _updatedAt: ts, _version: 2 });
+  return ts;
 }
 
 /**
@@ -223,13 +225,20 @@ export async function pushToCloud(): Promise<boolean> {
   if (!db) return false;
   const room = getSyncRoom();
   if (!room) return false;
+  pushInProgress = true;
   try {
     const data = gatherLocalData();
-    lastPushTimestamp = await writeCloudData(db, room, data);
+    // Pre-set the expected timestamp so the listener can skip our own write
+    const expectedTs = new Date().toISOString();
+    lastPushTimestamp = expectedTs;
+    await writeCloudData(db, room, data, expectedTs);
     return true;
   } catch (e) {
     console.error('Push to cloud failed:', e);
     return false;
+  } finally {
+    // Keep the flag a bit longer to cover any delayed listener callbacks
+    setTimeout(() => { pushInProgress = false; }, 3000);
   }
 }
 
@@ -255,10 +264,14 @@ export async function fetchCloudData(): Promise<boolean> {
       return false;
     }
 
-    // Apply to localStorage
+    // Apply to localStorage (with error handling for quota exceeded)
     ALL_STORAGE_KEYS.forEach(key => {
       if (result.data[key] !== undefined) {
-        localStorage.setItem(key, result.data[key]);
+        try {
+          localStorage.setItem(key, result.data[key]);
+        } catch (e) {
+          console.error(`Failed to write ${key} to localStorage:`, e);
+        }
       }
     });
 
@@ -292,7 +305,8 @@ export function startRealtimeSync(onDataReceived?: () => void): boolean {
     const meta = snapshot.data();
     if (!meta) return;
 
-    // Skip our own writes
+    // Skip our own writes (check both flag and timestamp)
+    if (pushInProgress) return;
     if (meta._updatedAt && meta._updatedAt === lastPushTimestamp) return;
 
     try {
@@ -304,8 +318,12 @@ export function startRealtimeSync(onDataReceived?: () => void): boolean {
         const cloudVal = result.data[key];
         const localVal = localStorage.getItem(key);
         if (cloudVal !== undefined && cloudVal !== localVal) {
-          localStorage.setItem(key, cloudVal);
-          changed = true;
+          try {
+            localStorage.setItem(key, cloudVal);
+            changed = true;
+          } catch (e) {
+            console.error(`Realtime sync: failed to write ${key} to localStorage:`, e);
+          }
         }
       });
 
