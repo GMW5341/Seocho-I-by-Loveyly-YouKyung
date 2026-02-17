@@ -22,6 +22,7 @@ export default function AttendanceManager() {
     startOfWeek(new Date(), { weekStartsOn: 1 })
   );
   const [selectedStudent, setSelectedStudent] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [showCalendar, setShowCalendar] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const calendarRef = useRef<HTMLDivElement>(null);
@@ -93,9 +94,16 @@ export default function AttendanceManager() {
     };
   };
 
-  const filteredStudents = selectedStudent === 'all'
-    ? activeStudents
-    : activeStudents.filter(s => s.id === selectedStudent);
+  const filteredStudents = useMemo(() => {
+    let result = activeStudents;
+    if (selectedStudent !== 'all') {
+      result = result.filter(s => s.id === selectedStudent);
+    }
+    if (searchQuery) {
+      result = result.filter(s => s.name.includes(searchQuery));
+    }
+    return result;
+  }, [activeStudents, selectedStudent, searchQuery]);
 
   // Calendar generation
   const calendarDays = useMemo(() => {
@@ -199,7 +207,24 @@ export default function AttendanceManager() {
       </div>
 
       {/* Student filter */}
-      <div className="mb-4">
+      <div className="flex gap-2 mb-4">
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="이름 검색..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-36 md:w-44 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+            >
+              &times;
+            </button>
+          )}
+        </div>
         <select
           value={selectedStudent}
           onChange={e => setSelectedStudent(e.target.value)}

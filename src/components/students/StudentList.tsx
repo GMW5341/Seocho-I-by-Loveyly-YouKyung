@@ -64,9 +64,12 @@ export default function StudentList() {
   const handleEdit = (data: Omit<Student, 'id' | 'createdAt' | 'active'>) => {
     if (editingStudent) {
       updateStudent(editingStudent.id, data);
-      // Sync schedules: remove old regular schedules and create new ones
-      const oldRegularSlots = schedules.filter(s => s.studentId === editingStudent.id && s.isRegular);
-      oldRegularSlots.forEach(slot => removeSchedule(slot.id));
+      // Sync schedules: remove old regular schedules, override markers, and orphaned moved slots
+      const oldSlots = schedules.filter(s =>
+        s.studentId === editingStudent.id &&
+        (s.isRegular || s.isOverrideHidden || (!s.isTrial && !s.isRegular))
+      );
+      oldSlots.forEach(slot => removeSchedule(slot.id));
       (data.regularSchedule || []).forEach(entry => {
         addSchedule({
           studentId: editingStudent.id,

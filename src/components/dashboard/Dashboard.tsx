@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { format, parseISO, startOfMonth, endOfMonth, subMonths, isWithinInterval, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { useAppStore } from '../../store/StoreContext';
 import { formatCurrency, getDayOfWeekFromDate, expandHolidayDates } from '../../utils/helpers';
 import Badge from '../common/Badge';
@@ -172,29 +172,45 @@ export default function Dashboard() {
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <h4 className="text-sm font-semibold text-gray-700 mb-4">월별 매출 현황</h4>
           <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={revenueChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `${(v / 10000).toFixed(0)}만`} />
-              <Tooltip formatter={(value) => formatCurrency(value as number)} />
-              <Bar dataKey="매출" fill="#6366f1" radius={[4, 4, 0, 0]} />
+            <BarChart data={revenueChartData} margin={{ top: 5, right: 5, bottom: 0, left: 5 }}>
+              <XAxis dataKey="month" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} dy={8} />
+              <Tooltip
+                formatter={(value) => formatCurrency(value as number)}
+                contentStyle={{ borderRadius: 12, border: '1px solid #e5e7eb', fontSize: 13 }}
+                cursor={{ fill: 'rgba(99,102,241,0.08)' }}
+              />
+              <Bar dataKey="매출" fill="#6366f1" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
         {/* Weekly Attendance Chart */}
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <h4 className="text-sm font-semibold text-gray-700 mb-4">이번주 출결 현황</h4>
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-sm font-semibold text-gray-700">이번주 출결 현황</h4>
+            <div className="flex items-center gap-3">
+              {[
+                { label: '출석', color: '#10b981' },
+                { label: '결석', color: '#ef4444' },
+                { label: '보강', color: '#3b82f6' },
+              ].map(item => (
+                <div key={item.label} className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                  <span className="text-xs text-gray-500">{item.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
           <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={weekAttendance}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="출석" fill="#10b981" radius={[2, 2, 0, 0]} />
-              <Bar dataKey="결석" fill="#ef4444" radius={[2, 2, 0, 0]} />
-              <Bar dataKey="보강" fill="#3b82f6" radius={[2, 2, 0, 0]} />
+            <BarChart data={weekAttendance} margin={{ top: 5, right: 5, bottom: 0, left: 5 }}>
+              <XAxis dataKey="day" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} dy={8} />
+              <Tooltip
+                contentStyle={{ borderRadius: 12, border: '1px solid #e5e7eb', fontSize: 13 }}
+                cursor={{ fill: 'rgba(99,102,241,0.08)' }}
+              />
+              <Bar dataKey="출석" fill="#10b981" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="결석" fill="#ef4444" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="보강" fill="#3b82f6" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -228,7 +244,7 @@ export default function Dashboard() {
                     총 원생
                   </tspan>
                 </text>
-                <Tooltip formatter={(value) => `${value}명`} />
+                <Tooltip formatter={(value) => `${value}명`} contentStyle={{ borderRadius: 12, border: '1px solid #e5e7eb', fontSize: 13 }} />
                 <Legend
                   verticalAlign="bottom"
                   formatter={(value, _entry) => {
