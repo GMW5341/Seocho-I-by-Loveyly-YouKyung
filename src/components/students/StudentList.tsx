@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '../../store/StoreContext';
 import type { Student, ClassLevel, StudentGrade, DayOfWeek } from '../../types';
-import { getClassLevelColor } from '../../utils/helpers';
+import { getClassLevelColor, timeToMinutes } from '../../utils/helpers';
 
 const GRADE_ORDER: Record<StudentGrade, number> = {
   '6세': 0, '7세': 1, '초등1': 2, '초등2': 3, '초등3': 4, '초등4': 5, '초등5': 6, '초등6': 7,
@@ -17,26 +17,25 @@ export default function StudentList() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterLevel, setFilterLevel] = useState<ClassLevel | '전체'>('전체');
   const [filterDay, setFilterDay] = useState<DayOfWeek | '전체'>('전체');
-  const [filterTime, setFilterTime] = useState<string>('전체');
+  const [filterTimeStart, setFilterTimeStart] = useState<string>('');
+  const [filterTimeEnd, setFilterTimeEnd] = useState<string>('');
   const [showInactive, setShowInactive] = useState(false);
-
-  // Collect all unique start times from active students' schedules
-  const availableTimes = useMemo(() => {
-    const times = new Set<string>();
-    students.filter(s => s.active).forEach(s => {
-      (s.regularSchedule || []).forEach(entry => times.add(entry.startTime));
-    });
-    return [...times].sort();
-  }, [students]);
 
   const filteredStudents = useMemo(() => {
     return students.filter(s => {
       if (!showInactive && !s.active) return false;
       if (filterLevel !== '전체' && s.level !== filterLevel) return false;
       if (filterDay !== '전체' && !(s.regularSchedule || []).some(entry => entry.day === filterDay)) return false;
-      if (filterTime !== '전체' && !(s.regularSchedule || []).some(entry =>
-        entry.startTime === filterTime && (filterDay === '전체' || entry.day === filterDay)
-      )) return false;
+      if (filterTimeStart && filterTimeEnd) {
+        const rangeStart = timeToMinutes(filterTimeStart);
+        const rangeEnd = timeToMinutes(filterTimeEnd);
+        if (!(s.regularSchedule || []).some(entry => {
+          if (filterDay !== '전체' && entry.day !== filterDay) return false;
+          const classStart = timeToMinutes(entry.startTime);
+          const classEnd = classStart + s.classDuration;
+          return classStart < rangeEnd && rangeStart < classEnd;
+        })) return false;
+      }
       if (searchQuery && !s.name.includes(searchQuery)) return false;
       return true;
     }).sort((a, b) => {
@@ -45,7 +44,7 @@ export default function StudentList() {
       if (gradeA !== gradeB) return gradeA - gradeB;
       return a.name.localeCompare(b.name, 'ko');
     });
-  }, [students, showInactive, filterLevel, filterDay, filterTime, searchQuery]);
+  }, [students, showInactive, filterLevel, filterDay, filterTimeStart, filterTimeEnd, searchQuery]);
 
   const handleAdd = (data: Omit<Student, 'id' | 'createdAt' | 'active'>) => {
     const newStudent = addStudent(data);
@@ -135,16 +134,32 @@ export default function StudentList() {
           <option value="금">금요일</option>
           <option value="토">토요일</option>
         </select>
-        <select
-          value={filterTime}
-          onChange={e => setFilterTime(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-        >
-          <option value="전체">전체 시간</option>
-          {availableTimes.map(t => (
-            <option key={t} value={t}>{t}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-1">
+          <input
+            type="time"
+            value={filterTimeStart}
+            onChange={e => setFilterTimeStart(e.target.value)}
+            className="border border-gray-300 rounded-lg px-2 py-2 text-sm w-[7rem] focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            placeholder="시작"
+          />
+          <span className="text-sm text-gray-400">~</span>
+          <input
+            type="time"
+            value={filterTimeEnd}
+            onChange={e => setFilterTimeEnd(e.target.value)}
+            className="border border-gray-300 rounded-lg px-2 py-2 text-sm w-[7rem] focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            placeholder="종료"
+          />
+          {(filterTimeStart || filterTimeEnd) && (
+            <button
+              onClick={() => { setFilterTimeStart(''); setFilterTimeEnd(''); }}
+              className="text-xs text-gray-400 hover:text-gray-600 ml-1"
+              title="시간 필터 초기화"
+            >
+              &times;
+            </button>
+          )}
+        </div>
         <label className="flex items-center gap-2 text-sm text-gray-600">
           <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} className="rounded" />
           퇴원생 포함

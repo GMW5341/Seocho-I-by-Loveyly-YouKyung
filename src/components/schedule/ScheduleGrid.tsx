@@ -70,6 +70,8 @@ export default function ScheduleGrid() {
     startOfWeek(new Date(), { weekStartsOn: 1 })
   );
   const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
+  const weekStartStr = format(currentWeekStart, 'yyyy-MM-dd');
+  const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
   const goToPrevWeek = () => setCurrentWeekStart(prev => subWeeks(prev, 1));
   const goToNextWeek = () => setCurrentWeekStart(prev => addWeeks(prev, 1));
 
@@ -384,6 +386,19 @@ export default function ScheduleGrid() {
     }
   };
 
+  // Restore a dragged slot back to its original regular position
+  const handleRestoreSlot = (slot: DisplaySlot) => {
+    const matchingHidden = schedules.find(s =>
+      s.isOverrideHidden &&
+      s.studentId === slot.studentId &&
+      s.date && s.date >= weekStartStr && s.date <= weekEndStr
+    );
+    if (matchingHidden) {
+      removeSchedule(matchingHidden.id);
+      removeSchedule(slot.id);
+    }
+  };
+
   const handleAddMakeup = (data: { studentId: string; dayOfWeek: DayOfWeek; startTime: string; duration: number; autoAttend: boolean }) => {
     const date = getDateForDay(data.dayOfWeek);
     addSchedule({
@@ -675,6 +690,12 @@ export default function ScheduleGrid() {
 
                     if (!isSpecial && !isTrial && !student) return null;
 
+                    const isRestorable = !slot.isRegular && !isTrial && !isSpecial && schedules.some(s =>
+                      s.isOverrideHidden &&
+                      s.studentId === slot.studentId &&
+                      s.date && s.date >= weekStartStr && s.date <= weekEndStr
+                    );
+
                     const top = (timeToMinutes(slot.startTime) - timeRange.earliest) * PX_PER_MINUTE;
                     const height = slot.duration * PX_PER_MINUTE;
                     const widthPercent = 100 / slot.numColumns;
@@ -751,6 +772,14 @@ export default function ScheduleGrid() {
                         <div className={`text-gray-500 ${isDayView ? 'text-xs' : 'text-[10px]'}`}>{slot.duration}분{isDayView && student ? ` | ${student.level}` : ''}</div>
                         {isTrial && <div className={`text-emerald-700 font-medium ${isDayView ? 'text-xs' : 'text-[10px]'}`}>체험</div>}
                         {!slot.isRegular && !isTrial && <div className={`text-orange-600 font-medium ${isDayView ? 'text-xs' : 'text-[10px]'}`}>보강</div>}
+                        {isRestorable && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleRestoreSlot(slot); }}
+                            className={`mt-0.5 text-blue-600 hover:text-blue-800 font-medium ${isDayView ? 'text-xs' : 'text-[9px]'}`}
+                          >
+                            ↩ 돌아가기
+                          </button>
+                        )}
                         {attendanceRecord && (
                           <div className={`font-bold mt-0.5 ${isDayView ? 'text-xs' : 'text-[9px]'} ${
                             attendanceRecord.status === '출석' ? 'text-green-700' : attendanceRecord.status === '결석' ? 'text-red-600' : 'text-blue-700'
