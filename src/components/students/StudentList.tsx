@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '../../store/StoreContext';
-import type { Student, ClassLevel, StudentGrade } from '../../types';
+import type { Student, ClassLevel, StudentGrade, DayOfWeek } from '../../types';
 import { getClassLevelColor } from '../../utils/helpers';
 
 const GRADE_ORDER: Record<StudentGrade, number> = {
@@ -16,12 +16,14 @@ export default function StudentList() {
   const [editingStudent, setEditingStudent] = useState<Student | undefined>();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterLevel, setFilterLevel] = useState<ClassLevel | '전체'>('전체');
+  const [filterDay, setFilterDay] = useState<DayOfWeek | '전체'>('전체');
   const [showInactive, setShowInactive] = useState(false);
 
   const filteredStudents = useMemo(() => {
     return students.filter(s => {
       if (!showInactive && !s.active) return false;
       if (filterLevel !== '전체' && s.level !== filterLevel) return false;
+      if (filterDay !== '전체' && !(s.regularSchedule || []).some(entry => entry.day === filterDay)) return false;
       if (searchQuery && !s.name.includes(searchQuery)) return false;
       return true;
     }).sort((a, b) => {
@@ -30,7 +32,7 @@ export default function StudentList() {
       if (gradeA !== gradeB) return gradeA - gradeB;
       return a.name.localeCompare(b.name, 'ko');
     });
-  }, [students, showInactive, filterLevel, searchQuery]);
+  }, [students, showInactive, filterLevel, filterDay, searchQuery]);
 
   const handleAdd = (data: Omit<Student, 'id' | 'createdAt' | 'active'>) => {
     const newStudent = addStudent(data);
@@ -106,6 +108,19 @@ export default function StudentList() {
           <option value="유아반">유아반</option>
           <option value="초등(저학년)">초등(저학년)</option>
           <option value="초등(고학년)">초등(고학년)</option>
+        </select>
+        <select
+          value={filterDay}
+          onChange={e => setFilterDay(e.target.value as DayOfWeek | '전체')}
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+        >
+          <option value="전체">전체 요일</option>
+          <option value="월">월요일</option>
+          <option value="화">화요일</option>
+          <option value="수">수요일</option>
+          <option value="목">목요일</option>
+          <option value="금">금요일</option>
+          <option value="토">토요일</option>
         </select>
         <label className="flex items-center gap-2 text-sm text-gray-600">
           <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} className="rounded" />
