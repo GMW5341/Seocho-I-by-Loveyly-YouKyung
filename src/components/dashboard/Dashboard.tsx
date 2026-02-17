@@ -5,11 +5,13 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useAppStore } from '../../store/StoreContext';
 import { formatCurrency, getDayOfWeekFromDate, expandHolidayDates } from '../../utils/helpers';
 import Badge from '../common/Badge';
+import type { DayOfWeek } from '../../types';
 
 const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
+const ALL_DAYS: DayOfWeek[] = ['월', '화', '수', '목', '금', '토'];
 
 export default function Dashboard() {
-  const { students, payments, attendance, schedules, holidays } = useAppStore();
+  const { students, payments, attendance, schedules, holidays, settings } = useAppStore();
   const activeStudents = useMemo(() => students.filter(s => s.active), [students]);
 
   // Check if today is a holiday
@@ -143,6 +145,54 @@ export default function Dashboard() {
       .sort((a, b) => a.remaining - b.remaining);
   }, [activeStudents, payments]);
 
+  // Slot availability: count students per (day, startTime) vs maxStudentsPerSlot
+  const slotAvailability = useMemo(() => {
+    const maxPerSlot = settings.maxStudentsPerSlot;
+    const activeIds = new Set(activeStudents.map(s => s.id));
+    const hours = settings.currentSeason === '방학중' ? settings.vacationHours : settings.semesterHours;
+
+    // Count regular schedule slots for active students
+    const regularSlots = schedules.filter(s =>
+      s.isRegular && !s.isTrial && activeIds.has(s.studentId)
+    );
+
+    const countMap = new Map<string, number>();
+    regularSlots.forEach(s => {
+      const key = `${s.dayOfWeek}-${s.startTime}`;
+      countMap.set(key, (countMap.get(key) || 0) + 1);
+    });
+
+    // Collect all unique start times, also generate times from operating hours
+    const timeSet = new Set<string>();
+    regularSlots.forEach(s => timeSet.add(s.startTime));
+
+    // Add time slots at 30-min intervals within operating hours for each day
+    ALL_DAYS.forEach(day => {
+      const dayHours = hours[day];
+      if (!dayHours) return;
+      const [sh, sm] = dayHours.start.split(':').map(Number);
+      const [eh, em] = dayHours.end.split(':').map(Number);
+      const startMin = sh * 60 + sm;
+      const endMin = eh * 60 + em;
+      for (let m = startMin; m < endMin; m += 30) {
+        const hh = String(Math.floor(m / 60)).padStart(2, '0');
+        const mm = String(m % 60).padStart(2, '0');
+        timeSet.add(`${hh}:${mm}`);
+      }
+    });
+
+    const allTimes = [...timeSet].sort();
+
+    // Determine which (day, time) is within operating hours
+    const isInHours = (day: DayOfWeek, time: string): boolean => {
+      const dayHours = hours[day];
+      if (!dayHours) return false;
+      return time >= dayHours.start && time < dayHours.end;
+    };
+
+    return { maxPerSlot, allTimes, countMap, isInHours };
+  }, [schedules, settings, activeStudents]);
+
   return (
     <div className="p-3 md:p-6">
       <div className="mb-4 md:mb-6">
@@ -167,6 +217,93 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
+
+      {/* Slot Availability Grid */}
+      {slotAvailability.allTimes.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 md:mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-semibold text-gray-700">시간대별 잔여석 현황</h4>
+            <span className="text-[11px] text-gray-400">동시간대 최대 {slotAvailability.maxPerSlot}명</span>
+          </div>
+          <div className="overflow-x-auto -mx-2 px-2">
+            <table className="w-full border-collapse text-center">
+              <thead>
+                <tr>
+                  <th className="text-[11px] font-medium text-gray-400 py-1.5 px-1 w-14 text-left">시간</th>
+                  {ALL_DAYS.map(day => (
+                    <th key={day} className="text-[11px] font-semibold text-gray-600 py-1.5 px-1">{day}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {slotAvailability.allTimes.map(time => {
+                  // Only show rows where at least one day has operating hours
+                  const hasAnyDay = ALL_DAYS.some(day => slotAvailability.isInHours(day, time));
+                  if (!hasAnyDay) return null;
+
+                  return (
+                    <tr key={time} className="border-t border-gray-50">
+                      <td className="text-[11px] font-mono text-gray-500 py-1 px-1 text-left">{time}</td>
+                      {ALL_DAYS.map(day => {
+                        const inHours = slotAvailability.isInHours(day, time);
+                        if (!inHours) {
+                          return <td key={day} className="py-1 px-1"><span className="text-[10px] text-gray-200">-</span></td>;
+                        }
+                        const count = slotAvailability.countMap.get(`${day}-${time}`) || 0;
+                        const max = slotAvailability.maxPerSlot;
+                        const remaining = max - count;
+                        const ratio = count / max;
+
+                        let bgClass: string, textClass: string, label: string;
+                        if (count === 0) {
+                          bgClass = 'bg-green-50';
+                          textClass = 'text-green-600';
+                          label = `${max}석`;
+                        } else if (ratio >= 1) {
+                          bgClass = 'bg-red-50';
+                          textClass = 'text-red-500 font-semibold';
+                          label = '만석';
+                        } else if (ratio >= 0.8) {
+                          bgClass = 'bg-amber-50';
+                          textClass = 'text-amber-600';
+                          label = `${remaining}석`;
+                        } else {
+                          bgClass = 'bg-green-50';
+                          textClass = 'text-green-600';
+                          label = `${remaining}석`;
+                        }
+
+                        return (
+                          <td key={day} className="py-1 px-0.5">
+                            <div className={`${bgClass} rounded px-1 py-0.5 inline-block min-w-[36px]`}>
+                              <div className={`text-[11px] ${textClass}`}>{label}</div>
+                              <div className="text-[9px] text-gray-400">{count}/{max}</div>
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center gap-3 mt-3 pt-2 border-t border-gray-100">
+            <div className="flex items-center gap-1">
+              <div className="w-2.5 h-2.5 rounded-sm bg-green-100 border border-green-300" />
+              <span className="text-[10px] text-gray-500">여유</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2.5 h-2.5 rounded-sm bg-amber-100 border border-amber-300" />
+              <span className="text-[10px] text-gray-500">임박</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2.5 h-2.5 rounded-sm bg-red-100 border border-red-300" />
+              <span className="text-[10px] text-gray-500">만석</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* Monthly Revenue Chart */}
