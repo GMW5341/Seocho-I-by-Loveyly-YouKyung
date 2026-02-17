@@ -17,13 +17,26 @@ export default function StudentList() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterLevel, setFilterLevel] = useState<ClassLevel | '전체'>('전체');
   const [filterDay, setFilterDay] = useState<DayOfWeek | '전체'>('전체');
+  const [filterTime, setFilterTime] = useState<string>('전체');
   const [showInactive, setShowInactive] = useState(false);
+
+  // Collect all unique start times from active students' schedules
+  const availableTimes = useMemo(() => {
+    const times = new Set<string>();
+    students.filter(s => s.active).forEach(s => {
+      (s.regularSchedule || []).forEach(entry => times.add(entry.startTime));
+    });
+    return [...times].sort();
+  }, [students]);
 
   const filteredStudents = useMemo(() => {
     return students.filter(s => {
       if (!showInactive && !s.active) return false;
       if (filterLevel !== '전체' && s.level !== filterLevel) return false;
       if (filterDay !== '전체' && !(s.regularSchedule || []).some(entry => entry.day === filterDay)) return false;
+      if (filterTime !== '전체' && !(s.regularSchedule || []).some(entry =>
+        entry.startTime === filterTime && (filterDay === '전체' || entry.day === filterDay)
+      )) return false;
       if (searchQuery && !s.name.includes(searchQuery)) return false;
       return true;
     }).sort((a, b) => {
@@ -32,7 +45,7 @@ export default function StudentList() {
       if (gradeA !== gradeB) return gradeA - gradeB;
       return a.name.localeCompare(b.name, 'ko');
     });
-  }, [students, showInactive, filterLevel, filterDay, searchQuery]);
+  }, [students, showInactive, filterLevel, filterDay, filterTime, searchQuery]);
 
   const handleAdd = (data: Omit<Student, 'id' | 'createdAt' | 'active'>) => {
     const newStudent = addStudent(data);
@@ -121,6 +134,16 @@ export default function StudentList() {
           <option value="목">목요일</option>
           <option value="금">금요일</option>
           <option value="토">토요일</option>
+        </select>
+        <select
+          value={filterTime}
+          onChange={e => setFilterTime(e.target.value)}
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+        >
+          <option value="전체">전체 시간</option>
+          {availableTimes.map(t => (
+            <option key={t} value={t}>{t}</option>
+          ))}
         </select>
         <label className="flex items-center gap-2 text-sm text-gray-600">
           <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} className="rounded" />

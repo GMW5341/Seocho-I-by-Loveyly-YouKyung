@@ -3,7 +3,7 @@ import { format, parseISO, startOfMonth, endOfMonth, subMonths, isWithinInterval
 import { ko } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { useAppStore } from '../../store/StoreContext';
-import { formatCurrency, getDayOfWeekFromDate, expandHolidayDates } from '../../utils/helpers';
+import { formatCurrency, getDayOfWeekFromDate, expandHolidayDates, isTimeOverlapping } from '../../utils/helpers';
 import Badge from '../common/Badge';
 const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
 
@@ -142,7 +142,7 @@ export default function Dashboard() {
       .sort((a, b) => a.remaining - b.remaining);
   }, [activeStudents, payments]);
 
-  // Full slots: find (day, time) pairs that are at max capacity
+  // Full slots: find (day, time) pairs at max capacity using overlap-based counting
   const fullSlots = useMemo(() => {
     const maxPerSlot = settings.maxStudentsPerSlot;
     const activeIds = new Set(activeStudents.map(s => s.id));
@@ -151,21 +151,25 @@ export default function Dashboard() {
       s.isRegular && !s.isTrial && activeIds.has(s.studentId)
     );
 
-    const countMap = new Map<string, number>();
-    regularSlots.forEach(s => {
-      const key = `${s.dayOfWeek}-${s.startTime}`;
-      countMap.set(key, (countMap.get(key) || 0) + 1);
-    });
-
+    const seen = new Set<string>();
     const result: { day: string; time: string; count: number }[] = [];
-    countMap.forEach((count, key) => {
-      if (count >= maxPerSlot) {
-        const [day, time] = key.split('-');
-        result.push({ day, time, count });
+
+    regularSlots.forEach(slot => {
+      const key = `${slot.dayOfWeek}-${slot.startTime}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+
+      // Count all slots on the same day that overlap in time (duration-aware)
+      const overlapping = regularSlots.filter(s =>
+        s.dayOfWeek === slot.dayOfWeek &&
+        isTimeOverlapping(s.startTime, s.duration, slot.startTime, slot.duration)
+      );
+
+      if (overlapping.length >= maxPerSlot) {
+        result.push({ day: slot.dayOfWeek, time: slot.startTime, count: overlapping.length });
       }
     });
 
-    // Sort by day order then time
     const dayOrder: Record<string, number> = { '월': 0, '화': 1, '수': 2, '목': 3, '금': 4, '토': 5 };
     result.sort((a, b) => (dayOrder[a.day] ?? 0) - (dayOrder[b.day] ?? 0) || a.time.localeCompare(b.time));
 
