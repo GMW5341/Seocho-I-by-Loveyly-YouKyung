@@ -93,6 +93,35 @@ export function useStore() {
   const [specialClassStudents, setSpecialClassStudents] = useState<SpecialClassStudent[]>(() => loadFromStorage(STORAGE_KEYS.specialClassStudents, []));
   const [logoDataUrl, setLogoDataUrl] = useState<string>(() => loadFromStorage(STORAGE_KEYS.logoDataUrl, ''));
 
+  // One-time startup sync: derive student.regularSchedule from actual schedule slots
+  const hasSynced = useRef(false);
+  useEffect(() => {
+    if (hasSynced.current) return;
+    hasSynced.current = true;
+
+    setStudents(prev => {
+      let changed = false;
+      const updated = prev.map(student => {
+        const regularSlots = schedules.filter(s => s.studentId === student.id && s.isRegular && !s.isOverrideHidden);
+        if (regularSlots.length === 0 && (!student.regularSchedule || student.regularSchedule.length === 0)) {
+          return student;
+        }
+        const derived = regularSlots
+          .map(s => ({ day: s.dayOfWeek, startTime: s.startTime }))
+          .sort((a, b) => a.day.localeCompare(b.day) || a.startTime.localeCompare(b.startTime));
+        const current = (student.regularSchedule || [])
+          .slice()
+          .sort((a, b) => a.day.localeCompare(b.day) || a.startTime.localeCompare(b.startTime));
+        const isSame = derived.length === current.length &&
+          derived.every((d, i) => d.day === current[i].day && d.startTime === current[i].startTime);
+        if (isSame) return student;
+        changed = true;
+        return { ...student, regularSchedule: derived };
+      });
+      return changed ? updated : prev;
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Cloud sync: debounced push (only after initial snapshot received to prevent empty data overwrite)
   const cloudSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleCloudPush = useCallback(() => {

@@ -14,6 +14,7 @@ export default function PaymentManager() {
   const [showForm, setShowForm] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | undefined>();
   const [filterView, setFilterView] = useState<'active' | 'all' | 'unpaid'>('active');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const activeStudents = useMemo(() => students.filter(s => s.active), [students]);
 
@@ -55,12 +56,16 @@ export default function PaymentManager() {
   }, [activeStudents, payments, attendance, holidays]);
 
   const filteredData = useMemo(() => {
-    switch (filterView) {
-      case 'unpaid': return studentPaymentData.filter(d => !d.hasPayment);
-      case 'active': return studentPaymentData.filter(d => d.hasPayment);
-      default: return studentPaymentData;
+    let result = studentPaymentData;
+    if (searchQuery) {
+      result = result.filter(d => d.student.name.includes(searchQuery));
     }
-  }, [studentPaymentData, filterView]);
+    switch (filterView) {
+      case 'unpaid': return result.filter(d => !d.hasPayment);
+      case 'active': return result.filter(d => d.hasPayment);
+      default: return result;
+    }
+  }, [studentPaymentData, filterView, searchQuery]);
 
   const handleAddPayment = (data: Omit<Payment, 'id' | 'usedSessions' | 'remainingSessions' | 'completed'>) => {
     addPayment(data);
@@ -122,7 +127,24 @@ export default function PaymentManager() {
       </div>
 
       {/* Filter */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4 items-center">
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="이름 검색..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm w-36 md:w-44 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+            >
+              &times;
+            </button>
+          )}
+        </div>
         {[
           { value: 'active' as const, label: '결제 중' },
           { value: 'unpaid' as const, label: '미결제' },

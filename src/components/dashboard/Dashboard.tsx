@@ -7,6 +7,40 @@ import { formatCurrency, getDayOfWeekFromDate, expandHolidayDates } from '../../
 import Badge from '../common/Badge';
 const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
 
+const DAILY_QUOTES = [
+  { text: '아이들의 그림 한 장에는 세상을 바꿀 힘이 있습니다.', author: '' },
+  { text: '예술은 가르치는 것이 아니라, 발견하게 하는 것입니다.', author: '' },
+  { text: '오늘도 아이들의 눈빛에서 가능성을 만나는 하루가 되길.', author: '' },
+  { text: '창의력은 실수를 두려워하지 않는 곳에서 자랍니다.', author: '' },
+  { text: '매일의 작은 가르침이 아이의 평생을 빛나게 합니다.', author: '' },
+  { text: '좋은 선생님은 아이에게 날개를 달아주는 사람입니다.', author: '' },
+  { text: '그림을 그리는 아이는 자기만의 세상을 만들고 있는 중입니다.', author: '' },
+  { text: '모든 아이는 예술가입니다. 문제는 어른이 되어서도 예술가로 남는 것이죠.', author: '파블로 피카소' },
+  { text: '색칠하는 손끝에서 아이의 마음이 피어납니다.', author: '' },
+  { text: '교육은 양동이를 채우는 것이 아니라, 불을 지피는 것입니다.', author: '윌리엄 버틀러 예이츠' },
+  { text: '오늘 한 아이가 그린 선 하나가 내일의 걸작이 됩니다.', author: '' },
+  { text: '가르침의 보람은 아이들의 성장 속에 있습니다.', author: '' },
+  { text: '예술을 통해 아이들은 자기 감정을 표현하는 법을 배웁니다.', author: '' },
+  { text: '완벽한 그림보다 즐거운 과정이 더 중요합니다.', author: '' },
+  { text: '선생님의 따뜻한 말 한마디가 아이의 자신감이 됩니다.', author: '' },
+  { text: '미술은 정답이 없는 유일한 수업입니다.', author: '' },
+  { text: '아이의 상상력에는 한계가 없습니다.', author: '' },
+  { text: '오늘의 수업이 아이에게 평생의 추억이 될 수 있습니다.', author: '' },
+  { text: '붓을 드는 순간, 아이는 자유를 배웁니다.', author: '' },
+  { text: '가르치는 일은 세상에서 가장 아름다운 예술입니다.', author: '' },
+  { text: '미술 교육은 눈에 보이지 않는 성장을 만듭니다.', author: '' },
+  { text: '아이들과 함께하는 매 순간이 선물입니다.', author: '' },
+  { text: '한 아이의 웃음이 하루의 피로를 녹입니다.', author: '' },
+  { text: '열정은 전염됩니다. 선생님이 즐거우면 아이도 즐겁습니다.', author: '' },
+  { text: '어떤 색이든 아이가 선택한 색이 가장 좋은 색입니다.', author: '' },
+  { text: '작은 칭찬이 큰 예술가를 만듭니다.', author: '' },
+  { text: '그림은 말로 표현할 수 없는 것을 보여주는 언어입니다.', author: '' },
+  { text: '오늘도 최선을 다하는 당신을 응원합니다.', author: '' },
+  { text: '아이에게 그림을 가르치는 것은 세상을 보는 눈을 키워주는 것입니다.', author: '' },
+  { text: '진정한 교육자는 아이의 가능성을 믿어주는 사람입니다.', author: '' },
+  { text: '하루하루 쌓인 정성이 결국 큰 차이를 만듭니다.', author: '' },
+];
+
 export default function Dashboard() {
   const { students, payments, attendance, schedules, holidays } = useAppStore();
   const activeStudents = useMemo(() => students.filter(s => s.active), [students]);
@@ -142,11 +176,30 @@ export default function Dashboard() {
       .sort((a, b) => a.remaining - b.remaining);
   }, [activeStudents, payments]);
 
+  // Daily quote - based on day of year, skip holidays/weekends
+  const dailyQuote = useMemo(() => {
+    if (isTodayHoliday) return null;
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    // 일(0), 월(1) = 휴원
+    if (dayOfWeek === 0 || dayOfWeek === 1) return null;
+    const startOfYear = new Date(today.getFullYear(), 0, 0);
+    const diff = today.getTime() - startOfYear.getTime();
+    const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
+    return DAILY_QUOTES[dayOfYear % DAILY_QUOTES.length];
+  }, [isTodayHoliday]);
+
   return (
     <div className="p-3 md:p-6">
       <div className="mb-4 md:mb-6">
         <h3 className="text-lg font-bold text-gray-800">대시보드</h3>
         <p className="text-sm text-gray-500">{format(new Date(), 'yyyy년 MM월 dd일 EEEE', { locale: ko })}</p>
+        {dailyQuote && (
+          <p className="mt-2 text-sm text-indigo-600 italic">
+            &ldquo;{dailyQuote.text}&rdquo;
+            {dailyQuote.author && <span className="text-indigo-400 not-italic"> &mdash; {dailyQuote.author}</span>}
+          </p>
+        )}
       </div>
 
       {/* Key Metrics */}
