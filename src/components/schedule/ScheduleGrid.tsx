@@ -59,6 +59,7 @@ export default function ScheduleGrid() {
   const [hoveredCell, setHoveredCell] = useState<{ day: DayOfWeek; time: string } | null>(null);
   const [memoSlot, setMemoSlot] = useState<{ slotId: string; studentId: string; date: string; startTime: string; memo: string } | null>(null);
   const [deletedSlot, setDeletedSlot] = useState<ScheduleSlot | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedDay, setSelectedDay] = useState<DayOfWeek | null>(null);
   const PX_PER_MINUTE = selectedDay ? PX_PER_MINUTE_DAY : PX_PER_MINUTE_WEEK;
   const dayColumnRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -497,7 +498,24 @@ export default function ScheduleGrid() {
             {settings.currentSeason} | 동시간대 최대 {settings.maxStudentsPerSlot}명
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="원생 검색..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-32 md:w-40 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+              >
+                &times;
+              </button>
+            )}
+          </div>
           <button
             onClick={() => setShowTrialForm(true)}
             className="bg-emerald-600 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-medium hover:bg-emerald-700 transition-colors whitespace-nowrap"
@@ -696,6 +714,8 @@ export default function ScheduleGrid() {
                       s.date && s.date >= weekStartStr && s.date <= weekEndStr
                     );
 
+                    const isSearchMatch = !searchQuery || displayName.includes(searchQuery);
+
                     const top = (timeToMinutes(slot.startTime) - timeRange.earliest) * PX_PER_MINUTE;
                     const height = slot.duration * PX_PER_MINUTE;
                     const widthPercent = 100 / slot.numColumns;
@@ -714,7 +734,7 @@ export default function ScheduleGrid() {
                           className={`
                             absolute z-10 rounded border-2 select-none overflow-hidden
                             bg-rose-100 border-rose-400
-                            opacity-95
+                            ${!isSearchMatch ? 'opacity-20' : 'opacity-95'}
                             ${isDayView ? 'px-3 py-2' : 'px-1.5 py-1'}
                           `}
                           style={{
@@ -754,7 +774,8 @@ export default function ScheduleGrid() {
                             : getDurationColor(slot.duration)
                           }
                           ${!slot.isRegular && !isTrial ? 'border-dashed border-orange-400 border-2' : ''}
-                          ${draggedSlot?.id === slot.id ? 'opacity-40' : 'opacity-95 hover:opacity-100'}
+                          ${draggedSlot?.id === slot.id ? 'opacity-40' : !isSearchMatch ? 'opacity-20' : 'opacity-95 hover:opacity-100'}
+                          ${isSearchMatch && searchQuery ? 'ring-2 ring-indigo-500 z-20' : ''}
                           ${attendanceClass}
                         `}
                         style={{

@@ -3,12 +3,12 @@ import { format, parseISO, startOfMonth, endOfMonth, subMonths, isWithinInterval
 import { ko } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { useAppStore } from '../../store/StoreContext';
-import { formatCurrency, getDayOfWeekFromDate, expandHolidayDates, isTimeOverlapping } from '../../utils/helpers';
+import { formatCurrency, getDayOfWeekFromDate, expandHolidayDates } from '../../utils/helpers';
 import Badge from '../common/Badge';
 const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
 
 export default function Dashboard() {
-  const { students, payments, attendance, schedules, holidays, settings } = useAppStore();
+  const { students, payments, attendance, schedules, holidays } = useAppStore();
   const activeStudents = useMemo(() => students.filter(s => s.active), [students]);
 
   // Check if today is a holiday
@@ -142,40 +142,6 @@ export default function Dashboard() {
       .sort((a, b) => a.remaining - b.remaining);
   }, [activeStudents, payments]);
 
-  // Full slots: find (day, time) pairs at max capacity using overlap-based counting
-  const fullSlots = useMemo(() => {
-    const maxPerSlot = settings.maxStudentsPerSlot;
-    const activeIds = new Set(activeStudents.map(s => s.id));
-
-    const regularSlots = schedules.filter(s =>
-      s.isRegular && !s.isTrial && activeIds.has(s.studentId)
-    );
-
-    const seen = new Set<string>();
-    const result: { day: string; time: string; count: number }[] = [];
-
-    regularSlots.forEach(slot => {
-      const key = `${slot.dayOfWeek}-${slot.startTime}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-
-      // Count all slots on the same day that overlap in time (duration-aware)
-      const overlapping = regularSlots.filter(s =>
-        s.dayOfWeek === slot.dayOfWeek &&
-        isTimeOverlapping(s.startTime, s.duration, slot.startTime, slot.duration)
-      );
-
-      if (overlapping.length >= maxPerSlot) {
-        result.push({ day: slot.dayOfWeek, time: slot.startTime, count: overlapping.length });
-      }
-    });
-
-    const dayOrder: Record<string, number> = { '월': 0, '화': 1, '수': 2, '목': 3, '금': 4, '토': 5 };
-    result.sort((a, b) => (dayOrder[a.day] ?? 0) - (dayOrder[b.day] ?? 0) || a.time.localeCompare(b.time));
-
-    return { items: result, maxPerSlot };
-  }, [schedules, settings, activeStudents]);
-
   return (
     <div className="p-3 md:p-6">
       <div className="mb-4 md:mb-6">
@@ -200,25 +166,6 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
-
-      {/* Full Slots Alert */}
-      {fullSlots.items.length > 0 && (
-        <div className="bg-red-50 rounded-xl border border-red-200 p-4 mb-4 md:mb-6">
-          <div className="flex items-center gap-2 mb-2">
-            <h4 className="text-sm font-semibold text-red-700">만석 시간대</h4>
-            <span className="text-[11px] text-red-400">동시간대 최대 {fullSlots.maxPerSlot}명</span>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {fullSlots.items.map(({ day, time, count }) => (
-              <span key={`${day}-${time}`} className="inline-flex items-center gap-1 bg-white border border-red-200 rounded-lg px-2.5 py-1">
-                <span className="text-xs font-semibold text-red-600">{day}</span>
-                <span className="text-xs font-mono text-gray-700">{time}</span>
-                <span className="text-[10px] text-red-400">{count}/{fullSlots.maxPerSlot}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* Monthly Revenue Chart */}
