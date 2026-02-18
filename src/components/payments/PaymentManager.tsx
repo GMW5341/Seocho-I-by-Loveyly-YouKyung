@@ -16,6 +16,8 @@ export default function PaymentManager() {
   const [editingPayment, setEditingPayment] = useState<Payment | undefined>();
   const [filterView, setFilterView] = useState<'active' | 'all' | 'unpaid'>('active');
   const [searchQuery, setSearchQuery] = useState('');
+  const [historySearchQuery, setHistorySearchQuery] = useState('');
+  const [showHistory, setShowHistory] = useState(true);
 
   const activeStudents = useMemo(() => students.filter(s => s.active), [students]);
 
@@ -68,6 +70,19 @@ export default function PaymentManager() {
     }
   }, [studentPaymentData, filterView, searchQuery]);
 
+  // All payment records for history view
+  const paymentHistory = useMemo(() => {
+    const allRecords = payments.map(p => {
+      const student = students.find(s => s.id === p.studentId);
+      return { payment: p, studentName: student?.name || '(삭제된 원생)', studentLevel: student?.level || '' };
+    });
+    let filtered = allRecords;
+    if (historySearchQuery) {
+      filtered = filtered.filter(r => r.studentName.includes(historySearchQuery));
+    }
+    return filtered.sort((a, b) => b.payment.paidAt.localeCompare(a.payment.paidAt));
+  }, [payments, students, historySearchQuery]);
+
   const handleAddPayment = (data: Omit<Payment, 'id' | 'usedSessions' | 'remainingSessions' | 'completed'> & { isPastRecord?: boolean }) => {
     const { isPastRecord, ...paymentData } = data;
     const newPayment = addPayment(paymentData);
@@ -84,12 +99,22 @@ export default function PaymentManager() {
 
   const handleEditPayment = (data: Omit<Payment, 'id' | 'usedSessions' | 'remainingSessions' | 'completed'>) => {
     if (editingPayment) {
-      const newRemaining = Math.max(0, data.totalSessions - editingPayment.usedSessions);
-      updatePayment(editingPayment.id, {
-        ...data,
-        remainingSessions: newRemaining,
-        completed: newRemaining <= 0,
-      });
+      // For completed/past records, keep them completed but update usedSessions to match
+      if (editingPayment.completed) {
+        updatePayment(editingPayment.id, {
+          ...data,
+          usedSessions: data.totalSessions,
+          remainingSessions: 0,
+          completed: true,
+        });
+      } else {
+        const newRemaining = Math.max(0, data.totalSessions - editingPayment.usedSessions);
+        updatePayment(editingPayment.id, {
+          ...data,
+          remainingSessions: newRemaining,
+          completed: newRemaining <= 0,
+        });
+      }
       setEditingPayment(undefined);
     }
   };
@@ -301,6 +326,128 @@ export default function PaymentManager() {
         </table>
       </div>
 
+      {/* Payment History */}
+      <div className="mt-8">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <h3 className="text-lg font-bold text-gray-800">결제 내역</h3>
+            <span className="text-sm text-gray-500">{paymentHistory.length}건</span>
+          </div>
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className="text-sm text-gray-500 hover:text-gray-700 font-medium"
+          >
+            {showHistory ? '접기' : '펼치기'}
+          </button>
+        </div>
+        {showHistory && (
+          <>
+            <div className="mb-3">
+              <div className="relative inline-block">
+                <input
+                  type="text"
+                  placeholder="이름 검색..."
+                  value={historySearchQuery}
+                  onChange={e => setHistorySearchQuery(e.target.value)}
+                  autoComplete="off"
+                  className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm w-36 md:w-44 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+                {historySearchQuery && (
+                  <button
+                    onClick={() => setHistorySearchQuery('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+                  >
+                    &times;
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 overflow-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">원생</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">수업</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">금액</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">횟수</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">상태</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">결제방식</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">결제일</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">메모</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">관리</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {paymentHistory.map(({ payment: p, studentName, studentLevel }) => (
+                    <tr key={p.id} className={`hover:bg-gray-50 ${p.completed ? 'bg-gray-50/50' : ''}`}>
+                      <td className="px-4 py-3">
+                        <div className="text-sm font-medium text-gray-900">{studentName}</div>
+                        {studentLevel && <div className="text-xs text-gray-500">{studentLevel}</div>}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{p.classDuration}분</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 font-medium">
+                        {formatCurrency(p.amount)}
+                        {p.discountRate ? (
+                          <span className="text-xs text-orange-500 ml-1">({p.discountRate}%↓)</span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {p.usedSessions}/{p.totalSessions}회
+                      </td>
+                      <td className="px-4 py-3">
+                        {p.completed ? (
+                          <Badge variant={p.memo?.includes('[과거 기록]') ? 'default' : 'success'}>
+                            {p.memo?.includes('[과거 기록]') ? '과거기록' : '완료'}
+                          </Badge>
+                        ) : p.remainingSessions <= 1 ? (
+                          <Badge variant="warning">잔여 {p.remainingSessions}회</Badge>
+                        ) : (
+                          <Badge variant="success">진행중</Badge>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{p.method}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {format(parseISO(p.paidAt), 'yyyy.MM.dd', { locale: ko })}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500 max-w-[120px] truncate" title={p.memo || ''}>
+                        {p.memo || '-'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setEditingPayment(p)}
+                            className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                          >
+                            수정
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm(`${studentName}님의 결제 기록을 삭제하시겠습니까?`)) {
+                                deletePayment(p.id);
+                              }
+                            }}
+                            className="text-xs text-red-500 hover:text-red-700 font-medium"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {paymentHistory.length === 0 && (
+                    <tr>
+                      <td colSpan={9} className="px-4 py-12 text-center text-sm text-gray-400">
+                        결제 내역이 없습니다.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+
       {/* Add Payment Modal */}
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} title="결제 등록" size="lg">
         <PaymentForm
@@ -315,7 +462,7 @@ export default function PaymentManager() {
       <Modal isOpen={!!editingPayment} onClose={() => setEditingPayment(undefined)} title="결제 수정" size="lg">
         {editingPayment && (
           <PaymentForm
-            students={activeStudents}
+            students={students}
             settings={settings}
             payment={editingPayment}
             onSubmit={handleEditPayment}
