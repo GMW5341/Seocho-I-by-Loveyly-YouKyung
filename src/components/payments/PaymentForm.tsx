@@ -31,6 +31,7 @@ export default function PaymentForm({ students, settings, payment, isPastMode, o
   );
   const [paidAt, setPaidAt] = useState(payment?.paidAt || format(new Date(), 'yyyy-MM-dd'));
   const [startDate, setStartDate] = useState(payment?.startDate || format(new Date(), 'yyyy-MM-dd'));
+  const [lastClassDate, setLastClassDate] = useState(payment?.lastClassDate || '');
   const [memo, setMemo] = useState(payment?.memo || '');
 
   const selectedStudent = students.find(s => s.id === studentId);
@@ -83,6 +84,7 @@ export default function PaymentForm({ students, settings, payment, isPastMode, o
       classDuration,
       paidAt,
       startDate: isPastMode ? paidAt : startDate,
+      lastClassDate: isPastMode && lastClassDate ? lastClassDate : undefined,
       memo: isPastMode ? (memo ? `[과거 기록] ${memo}` : '[과거 기록]') : memo,
       isPastRecord: isPastMode || undefined,
     });
@@ -443,7 +445,7 @@ export default function PaymentForm({ students, settings, payment, isPastMode, o
         )}
       </div>
 
-      <div className={isPastMode ? '' : 'grid grid-cols-2 gap-4'}>
+      <div className={isPastMode ? 'grid grid-cols-2 gap-4' : 'grid grid-cols-2 gap-4'}>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">결제일</label>
           <input
@@ -453,7 +455,17 @@ export default function PaymentForm({ students, settings, payment, isPastMode, o
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
           />
         </div>
-        {!isPastMode && (
+        {isPastMode ? (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">마지막 수업일</label>
+            <input
+              type="date"
+              value={lastClassDate}
+              onChange={e => setLastClassDate(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+        ) : (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">수업 시작일</label>
             <input

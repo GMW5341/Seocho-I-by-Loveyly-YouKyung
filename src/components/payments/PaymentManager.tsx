@@ -77,8 +77,8 @@ export default function PaymentManager() {
       const student = students.find(s => s.id === p.studentId);
 
       // Calculate last class date for this payment record
-      let lastClassDate: string | null = null;
-      if (student) {
+      let lastClassDate: string | null = p.lastClassDate || null;
+      if (!lastClassDate && student) {
         // Find actual attendance dates during this payment period
         const paymentAttendance = attendance
           .filter(r => r.studentId === p.studentId && (r.status === '출석' || r.status === '보강'))

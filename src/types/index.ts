@@ -80,6 +80,7 @@ export interface Payment {
   classDuration: ClassDuration;
   memo: string;
   completed: boolean; // 모든 수업 소진 여부
+  lastClassDate?: string; // 마지막 수업일 (과거 기록용)
 }
 
 export interface Holiday {
