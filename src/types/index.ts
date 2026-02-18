@@ -81,6 +81,8 @@ export interface Payment {
   memo: string;
   completed: boolean; // 모든 수업 소진 여부
   lastClassDate?: string; // 마지막 수업일 (과거 기록용)
+  sessionsPerWeek?: number; // 주당 수업 횟수
+  regularSchedule?: RegularScheduleEntry[]; // 이 결제의 수업 스케줄
 }
 
 export interface Holiday {

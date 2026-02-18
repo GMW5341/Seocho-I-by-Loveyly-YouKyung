@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import type { Student, Payment, PaymentMethod, ClassDuration, AcademySettings, ExtraDiscount, SplitPayment } from '../../types';
+import type { Student, Payment, PaymentMethod, ClassDuration, AcademySettings, ExtraDiscount, SplitPayment, DayOfWeek, RegularScheduleEntry } from '../../types';
 import { formatCurrency, getPricePerSession } from '../../utils/helpers';
 
 interface PaymentFormProps {
@@ -13,6 +13,12 @@ interface PaymentFormProps {
 }
 
 const PAYMENT_METHODS: PaymentMethod[] = ['계좌이체', '현금', '카드', '온누리상품권', '기타'];
+const DAYS: DayOfWeek[] = ['월', '화', '수', '목', '금', '토'];
+const TIME_SLOTS = Array.from({ length: 27 }, (_, i) => {
+  const h = Math.floor(i / 2) + 10;
+  const m = i % 2 === 0 ? '00' : '30';
+  return `${String(h).padStart(2, '0')}:${m}`;
+});
 
 export default function PaymentForm({ students, settings, payment, isPastMode, onSubmit, onCancel }: PaymentFormProps) {
   const [studentId, setStudentId] = useState(payment?.studentId || '');
@@ -32,6 +38,12 @@ export default function PaymentForm({ students, settings, payment, isPastMode, o
   const [paidAt, setPaidAt] = useState(payment?.paidAt || format(new Date(), 'yyyy-MM-dd'));
   const [startDate, setStartDate] = useState(payment?.startDate || format(new Date(), 'yyyy-MM-dd'));
   const [lastClassDate, setLastClassDate] = useState(payment?.lastClassDate || '');
+  const [sessionsPerWeek, setSessionsPerWeek] = useState(
+    payment?.sessionsPerWeek || payment?.regularSchedule?.length || 0
+  );
+  const [regularSchedule, setRegularSchedule] = useState<RegularScheduleEntry[]>(
+    payment?.regularSchedule || []
+  );
   const [memo, setMemo] = useState(payment?.memo || '');
 
   const selectedStudent = students.find(s => s.id === studentId);
@@ -61,12 +73,32 @@ export default function PaymentForm({ students, settings, payment, isPastMode, o
     }
   }, [originalAmount, discountRate, extraDiscountTotal, manualAmount]);
 
-  // Auto-set duration from student selection
+  // Auto-set duration and schedule from student selection
   useEffect(() => {
     if (selectedStudent && !payment) {
       setClassDuration(selectedStudent.classDuration);
+      // Load existing schedule from student as default
+      if (selectedStudent.regularSchedule?.length) {
+        setSessionsPerWeek(selectedStudent.sessionsPerWeek || selectedStudent.regularSchedule.length);
+        setRegularSchedule([...selectedStudent.regularSchedule]);
+      }
     }
   }, [selectedStudent, payment]);
+
+  const handleSessionsPerWeekChange = (n: number) => {
+    setSessionsPerWeek(n);
+    if (n > regularSchedule.length) {
+      const newEntries: RegularScheduleEntry[] = [...regularSchedule];
+      const usedDays = newEntries.map(e => e.day);
+      const availableDays = DAYS.filter(d => !usedDays.includes(d));
+      for (let i = regularSchedule.length; i < n; i++) {
+        newEntries.push({ day: availableDays[i - regularSchedule.length] || '월', startTime: '14:00' });
+      }
+      setRegularSchedule(newEntries);
+    } else {
+      setRegularSchedule(regularSchedule.slice(0, n));
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,6 +117,8 @@ export default function PaymentForm({ students, settings, payment, isPastMode, o
       paidAt,
       startDate: isPastMode ? paidAt : startDate,
       lastClassDate: isPastMode && lastClassDate ? lastClassDate : undefined,
+      sessionsPerWeek: !isPastMode && sessionsPerWeek > 0 ? sessionsPerWeek : undefined,
+      regularSchedule: !isPastMode && regularSchedule.length > 0 ? regularSchedule : undefined,
       memo: isPastMode ? (memo ? `[과거 기록] ${memo}` : '[과거 기록]') : memo,
       isPastRecord: isPastMode || undefined,
     });
@@ -444,6 +478,83 @@ export default function PaymentForm({ students, settings, payment, isPastMode, o
           </div>
         )}
       </div>
+
+      {/* Schedule Section - only for non-past mode */}
+      {!isPastMode && studentId && (
+        <div className="bg-blue-50 rounded-lg p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="block text-sm font-bold text-gray-800">수업 스케줄</label>
+            {selectedStudent?.regularSchedule?.length ? (
+              <span className="text-xs text-blue-600">기존 스케줄이 자동 로드되었습니다</span>
+            ) : null}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">주당 수업 횟수</label>
+            <div className="flex gap-2">
+              {[1, 2, 3, 4, 5].map(n => (
+                <button
+                  type="button"
+                  key={n}
+                  onClick={() => handleSessionsPerWeekChange(n)}
+                  className={`flex-1 px-2 py-1.5 rounded-lg text-sm font-medium border ${
+                    sessionsPerWeek === n
+                      ? 'bg-blue-500 border-blue-500 text-white'
+                      : 'border-gray-300 text-gray-600 hover:bg-white'
+                  }`}
+                >
+                  주{n}회
+                </button>
+              ))}
+            </div>
+          </div>
+          {sessionsPerWeek > 0 && (
+            <div className="space-y-2">
+              <label className="block text-xs font-medium text-gray-600">요일 및 시간 ({sessionsPerWeek}회 수업)</label>
+              {regularSchedule.map((entry, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 w-6">{i + 1}.</span>
+                  <div className="flex gap-1">
+                    {DAYS.map(d => (
+                      <button
+                        type="button"
+                        key={d}
+                        onClick={() => {
+                          const updated = [...regularSchedule];
+                          updated[i] = { ...updated[i], day: d };
+                          setRegularSchedule(updated);
+                        }}
+                        className={`w-8 h-8 rounded-full text-xs font-medium border ${
+                          entry.day === d
+                            ? 'bg-blue-500 border-blue-500 text-white'
+                            : 'border-gray-300 text-gray-500 hover:bg-white'
+                        }`}
+                      >
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                  <select
+                    value={entry.startTime}
+                    onChange={e => {
+                      const updated = [...regularSchedule];
+                      updated[i] = { ...updated[i], startTime: e.target.value };
+                      setRegularSchedule(updated);
+                    }}
+                    className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm flex-1"
+                  >
+                    {TIME_SLOTS.map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+          )}
+          {sessionsPerWeek === 0 && (
+            <p className="text-xs text-gray-400">주당 수업 횟수를 선택하면 요일/시간을 설정할 수 있습니다.</p>
+          )}
+        </div>
+      )}
 
       <div className={isPastMode ? 'grid grid-cols-2 gap-4' : 'grid grid-cols-2 gap-4'}>
         <div>

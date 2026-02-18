@@ -170,28 +170,52 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
           정규 수업 스케줄
           <span className="text-xs text-gray-400 ml-1">({sessionsPerWeek}회 수업)</span>
         </label>
-        <div className="space-y-2">
-          {regularSchedule.map((entry, index) => (
-            <div key={index} className="flex items-center gap-3">
-              <span className="w-6 text-center text-xs font-medium text-gray-400">
-                {index + 1}
-              </span>
-              <select
-                value={entry.day}
-                onChange={e => updateScheduleEntry(index, 'day', e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              >
-                {DAYS_OF_WEEK.map(d => <option key={d} value={d}>{d}요일</option>)}
-              </select>
-              <input
-                type="time"
-                value={entry.startTime}
-                onChange={e => updateScheduleEntry(index, 'startTime', e.target.value)}
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              />
+        {student ? (
+          /* 수정 모드: 읽기 전용 - 결제 관리에서 변경 */
+          <div>
+            {regularSchedule.length > 0 ? (
+              <div className="space-y-1">
+                {regularSchedule.map((entry, index) => (
+                  <div key={index} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+                    <span className="text-xs font-medium text-gray-400 w-4">{index + 1}.</span>
+                    <span className="text-sm font-medium text-gray-700">{entry.day}요일</span>
+                    <span className="text-sm text-gray-600">{entry.startTime}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400">스케줄이 설정되지 않았습니다.</p>
+            )}
+            <p className="text-xs text-blue-600 mt-2">수업 스케줄은 결제 관리에서 결제 등록/수정 시 변경할 수 있습니다.</p>
+          </div>
+        ) : (
+          /* 신규 등록: 편집 가능 */
+          <div>
+            <div className="space-y-2">
+              {regularSchedule.map((entry, index) => (
+                <div key={index} className="flex items-center gap-3">
+                  <span className="w-6 text-center text-xs font-medium text-gray-400">
+                    {index + 1}
+                  </span>
+                  <select
+                    value={entry.day}
+                    onChange={e => updateScheduleEntry(index, 'day', e.target.value)}
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  >
+                    {DAYS_OF_WEEK.map(d => <option key={d} value={d}>{d}요일</option>)}
+                  </select>
+                  <input
+                    type="time"
+                    value={entry.startTime}
+                    onChange={e => updateScheduleEntry(index, 'startTime', e.target.value)}
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  />
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+            <p className="text-xs text-gray-400 mt-2">첫 결제 등록 시 스케줄을 다시 설정할 수 있습니다.</p>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">

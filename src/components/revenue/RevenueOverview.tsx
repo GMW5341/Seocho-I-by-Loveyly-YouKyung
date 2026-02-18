@@ -11,6 +11,7 @@ const getSpecialTotal = (s: { amount: number; extraCharges?: { label: string; am
 export default function RevenueOverview() {
   const { payments, trialLessons, specialClasses, specialClassStudents, students, trialStudents } = useAppStore();
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const [trendMonths, setTrendMonths] = useState<3 | 6 | 12>(6);
 
   const revenueData = useMemo(() => {
     const [year, month] = selectedMonth.split('-').map(Number);
@@ -132,10 +133,10 @@ export default function RevenueOverview() {
     };
   }, [payments, trialLessons, specialClassStudents, selectedMonth]);
 
-  // Monthly trend (last 6 months)
+  // Monthly trend (configurable period)
   const monthlyTrend = useMemo(() => {
     const months: { label: string; total: number; regular: number; trial: number; special: number }[] = [];
-    for (let i = 5; i >= 0; i--) {
+    for (let i = trendMonths - 1; i >= 0; i--) {
       const d = subMonths(new Date(), i);
       const mStart = startOfMonth(d);
       const mEnd = endOfMonth(d);
@@ -157,7 +158,7 @@ export default function RevenueOverview() {
       });
     }
     return months;
-  }, [payments, trialLessons, specialClassStudents]);
+  }, [payments, trialLessons, specialClassStudents, trendMonths]);
 
   const maxTrend = Math.max(...monthlyTrend.map(m => m.total), 1);
 
@@ -345,11 +346,28 @@ export default function RevenueOverview() {
 
       {/* Monthly Trend Chart */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h4 className="text-sm font-semibold text-gray-700 mb-4">월별 매출 추이 (최근 6개월)</h4>
-        <div className="flex items-end gap-3 h-48">
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-sm font-semibold text-gray-700">월별 매출 추이 (최근 {trendMonths}개월)</h4>
+          <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+            {([3, 6, 12] as const).map(m => (
+              <button
+                key={m}
+                onClick={() => setTrendMonths(m)}
+                className={`px-3 py-1 text-xs font-medium transition-colors ${
+                  trendMonths === m
+                    ? 'bg-indigo-500 text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {m}개월
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className={`flex items-end ${trendMonths <= 6 ? 'gap-3' : 'gap-1'} h-48`}>
           {monthlyTrend.map((m, i) => (
-            <div key={i} className="flex-1 flex flex-col items-center justify-end h-full">
-              <div className="text-xs font-medium text-gray-700 mb-1">{formatCurrency(m.total)}</div>
+            <div key={i} className="flex-1 flex flex-col items-center justify-end h-full min-w-0">
+              <div className={`font-medium text-gray-700 mb-1 truncate w-full text-center ${trendMonths <= 6 ? 'text-xs' : 'text-[10px]'}`}>{formatCurrency(m.total)}</div>
               <div className="w-full flex flex-col justify-end" style={{ height: '70%' }}>
                 {m.special > 0 && (
                   <div
