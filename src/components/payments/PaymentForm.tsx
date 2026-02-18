@@ -7,13 +7,14 @@ interface PaymentFormProps {
   students: Student[];
   settings: AcademySettings;
   payment?: Payment;
-  onSubmit: (data: Omit<Payment, 'id' | 'usedSessions' | 'remainingSessions' | 'completed'>) => void;
+  isPastMode?: boolean;
+  onSubmit: (data: Omit<Payment, 'id' | 'usedSessions' | 'remainingSessions' | 'completed'> & { isPastRecord?: boolean }) => void;
   onCancel: () => void;
 }
 
 const PAYMENT_METHODS: PaymentMethod[] = ['계좌이체', '현금', '카드', '온누리상품권', '기타'];
 
-export default function PaymentForm({ students, settings, payment, onSubmit, onCancel }: PaymentFormProps) {
+export default function PaymentForm({ students, settings, payment, isPastMode, onSubmit, onCancel }: PaymentFormProps) {
   const [studentId, setStudentId] = useState(payment?.studentId || '');
   const [studentSearch, setStudentSearch] = useState('');
   const [totalSessions, setTotalSessions] = useState(payment?.totalSessions || 4);
@@ -65,8 +66,9 @@ export default function PaymentForm({ students, settings, payment, onSubmit, onC
       method,
       classDuration,
       paidAt,
-      startDate,
-      memo,
+      startDate: isPastMode ? paidAt : startDate,
+      memo: isPastMode ? (memo ? `[과거 기록] ${memo}` : '[과거 기록]') : memo,
+      isPastRecord: isPastMode || undefined,
     });
   };
 
@@ -263,7 +265,7 @@ export default function PaymentForm({ students, settings, payment, onSubmit, onC
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className={isPastMode ? '' : 'grid grid-cols-2 gap-4'}>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">결제일</label>
           <input
@@ -273,16 +275,23 @@ export default function PaymentForm({ students, settings, payment, onSubmit, onC
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">수업 시작일</label>
-          <input
-            type="date"
-            value={startDate}
-            onChange={e => setStartDate(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-          />
-        </div>
+        {!isPastMode && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">수업 시작일</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={e => setStartDate(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+        )}
       </div>
+      {isPastMode && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">
+          과거 결제 기록은 매출에만 반영되며, 수업 잔여 횟수에는 영향을 주지 않습니다.
+        </div>
+      )}
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">메모</label>

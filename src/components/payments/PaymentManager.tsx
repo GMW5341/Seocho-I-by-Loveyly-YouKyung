@@ -12,6 +12,7 @@ import PaymentForm from './PaymentForm';
 export default function PaymentManager() {
   const { students, payments, addPayment, updatePayment, deletePayment, attendance, holidays, settings } = useAppStore();
   const [showForm, setShowForm] = useState(false);
+  const [showPastForm, setShowPastForm] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | undefined>();
   const [filterView, setFilterView] = useState<'active' | 'all' | 'unpaid'>('active');
   const [searchQuery, setSearchQuery] = useState('');
@@ -67,9 +68,18 @@ export default function PaymentManager() {
     }
   }, [studentPaymentData, filterView, searchQuery]);
 
-  const handleAddPayment = (data: Omit<Payment, 'id' | 'usedSessions' | 'remainingSessions' | 'completed'>) => {
-    addPayment(data);
+  const handleAddPayment = (data: Omit<Payment, 'id' | 'usedSessions' | 'remainingSessions' | 'completed'> & { isPastRecord?: boolean }) => {
+    const { isPastRecord, ...paymentData } = data;
+    const newPayment = addPayment(paymentData);
+    if (isPastRecord) {
+      updatePayment(newPayment.id, {
+        usedSessions: paymentData.totalSessions,
+        remainingSessions: 0,
+        completed: true,
+      });
+    }
     setShowForm(false);
+    setShowPastForm(false);
   };
 
   const handleEditPayment = (data: Omit<Payment, 'id' | 'usedSessions' | 'remainingSessions' | 'completed'>) => {
@@ -94,6 +104,12 @@ export default function PaymentManager() {
             className="border border-emerald-300 text-emerald-700 bg-emerald-50 px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-100"
           >
             엑셀 다운로드
+          </button>
+          <button
+            onClick={() => setShowPastForm(true)}
+            className="border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
+          >
+            + 과거 기록
           </button>
           <button
             onClick={() => setShowForm(true)}
@@ -306,6 +322,17 @@ export default function PaymentManager() {
             onCancel={() => setEditingPayment(undefined)}
           />
         )}
+      </Modal>
+
+      {/* Past Payment Modal */}
+      <Modal isOpen={showPastForm} onClose={() => setShowPastForm(false)} title="과거 결제 기록" size="lg">
+        <PaymentForm
+          students={activeStudents}
+          settings={settings}
+          isPastMode
+          onSubmit={handleAddPayment}
+          onCancel={() => setShowPastForm(false)}
+        />
       </Modal>
     </div>
   );
