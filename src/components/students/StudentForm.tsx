@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Student, ClassDuration, ClassLevel, StudentGrade, Gender } from '../../types';
+import type { Student, ClassLevel, StudentGrade, Gender } from '../../types';
 
 interface StudentFormProps {
   student?: Student;
@@ -9,14 +9,12 @@ interface StudentFormProps {
 
 const STUDENT_GRADES: StudentGrade[] = ['6세', '7세', '초등1', '초등2', '초등3', '초등4', '초등5', '초등6'];
 const CLASS_LEVELS: ClassLevel[] = ['유아반', '초등(저학년)', '초등(고학년)'];
-const CLASS_DURATIONS: ClassDuration[] = [60, 80, 100];
 
 export default function StudentForm({ student, onSubmit, onCancel }: StudentFormProps) {
   const [name, setName] = useState(student?.name || '');
   const [gender, setGender] = useState<Gender | undefined>(student?.gender);
   const [grade, setGrade] = useState<StudentGrade>(student?.grade || '6세');
   const [level, setLevel] = useState<ClassLevel>(student?.level || '유아반');
-  const [classDuration, setClassDuration] = useState<ClassDuration>(student?.classDuration || 60);
   const [phone, setPhone] = useState(student?.phone || '');
   const [parentPhone, setParentPhone] = useState(student?.parentPhone || '');
   const [memo, setMemo] = useState(student?.memo || '');
@@ -29,7 +27,7 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
       gender,
       grade,
       level,
-      classDuration,
+      classDuration: student?.classDuration || 60,
       sessionsPerWeek: student?.sessionsPerWeek || 0,
       regularSchedule: student?.regularSchedule || [],
       phone,
@@ -92,27 +90,15 @@ export default function StudentForm({ student, onSubmit, onCancel }: StudentForm
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">반</label>
-          <select
-            value={level}
-            onChange={e => setLevel(e.target.value as ClassLevel)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-          >
-            {CLASS_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">수업 시간</label>
-          <select
-            value={classDuration}
-            onChange={e => setClassDuration(Number(e.target.value) as ClassDuration)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-          >
-            {CLASS_DURATIONS.map(d => <option key={d} value={d}>{d}분</option>)}
-          </select>
-        </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">반</label>
+        <select
+          value={level}
+          onChange={e => setLevel(e.target.value as ClassLevel)}
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+        >
+          {CLASS_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+        </select>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
