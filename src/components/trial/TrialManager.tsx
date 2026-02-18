@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, startOfWeek, addDays } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useAppStore } from '../../store/StoreContext';
 import type { PaymentMethod, ClassDuration, DayOfWeek, StudentGrade } from '../../types';
@@ -18,25 +18,12 @@ export default function TrialManager() {
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [showTrialForm, setShowTrialForm] = useState(false);
 
-  // Calculate the next occurrence of a given day of week from today
-  const getNextDateForDay = useCallback((day: DayOfWeek): string => {
-    const dayMap: Record<DayOfWeek, number> = { '월': 0, '화': 1, '수': 2, '목': 3, '금': 4, '토': 5 };
-    const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-    const targetDate = addDays(weekStart, dayMap[day]);
-    // If target date is in the past, use next week
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (targetDate < today) {
-      return format(addDays(targetDate, 7), 'yyyy-MM-dd');
-    }
-    return format(targetDate, 'yyyy-MM-dd');
-  }, []);
-
   const handleAddTrial = useCallback((data: {
     name: string;
     grade: StudentGrade;
     parentPhone: string;
     memo: string;
+    date: string;
     dayOfWeek: DayOfWeek;
     startTime: string;
     duration: ClassDuration;
@@ -52,6 +39,7 @@ export default function TrialManager() {
       dayOfWeek: data.dayOfWeek,
       startTime: data.startTime,
       duration: data.duration,
+      date: data.date,
       paid: false,
       amount: TRIAL_PRICING[data.duration],
     });
@@ -63,10 +51,10 @@ export default function TrialManager() {
       isRegular: false,
       isTrial: true,
       trialStudentId: trialStudent.id,
-      date: getNextDateForDay(data.dayOfWeek),
+      date: data.date,
     });
     setShowTrialForm(false);
-  }, [addTrialStudent, addTrialLesson, addSchedule, getNextDateForDay]);
+  }, [addTrialStudent, addTrialLesson, addSchedule]);
 
   const trialData = useMemo(() => {
     return trialStudents.map(student => {
@@ -189,7 +177,9 @@ export default function TrialManager() {
                 <td className="px-4 py-3 text-sm text-gray-600">{student.parentPhone || '-'}</td>
                 <td className="px-4 py-3 text-sm text-gray-600">
                   {lessons.map(l => (
-                    <div key={l.id}>{l.dayOfWeek} {l.startTime} ({l.duration}분)</div>
+                    <div key={l.id}>
+                      {l.date ? format(parseISO(l.date), 'MM/dd', { locale: ko }) : ''} ({l.dayOfWeek}) {l.startTime} · {l.duration}분
+                    </div>
                   ))}
                 </td>
                 <td className="px-4 py-3 text-sm font-medium text-gray-900">
@@ -260,7 +250,9 @@ export default function TrialManager() {
               <>
                 <div className="bg-gray-50 rounded-lg p-3 text-sm">
                   <div className="font-medium text-gray-900">{student.name} ({student.grade})</div>
-                  <div className="text-gray-600">{lesson.dayOfWeek} {lesson.startTime} | {lesson.duration}분</div>
+                  <div className="text-gray-600">
+                    {lesson.date ? format(parseISO(lesson.date), 'MM/dd', { locale: ko }) + ' ' : ''}{lesson.dayOfWeek} {lesson.startTime} | {lesson.duration}분
+                  </div>
                   <div className="text-lg font-bold text-gray-900 mt-1">{formatCurrency(lesson.amount)}</div>
                 </div>
                 <div>

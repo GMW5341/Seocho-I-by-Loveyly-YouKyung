@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { format, parseISO, getDay } from 'date-fns';
 import type { DayOfWeek, ClassDuration, StudentGrade } from '../../types';
 import { TRIAL_PRICING } from '../../types';
-import { DAYS_OF_WEEK } from '../../utils/helpers';
 import { formatCurrency } from '../../utils/helpers';
 
 const STUDENT_GRADES: StudentGrade[] = ['6세', '7세', '초등1', '초등2', '초등3', '초등4', '초등5', '초등6'];
+
+const DAY_MAP: Record<number, DayOfWeek> = { 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토' };
 
 interface TrialFormProps {
   onSubmit: (data: {
@@ -12,6 +14,7 @@ interface TrialFormProps {
     grade: StudentGrade;
     parentPhone: string;
     memo: string;
+    date: string;
     dayOfWeek: DayOfWeek;
     startTime: string;
     duration: ClassDuration;
@@ -24,14 +27,19 @@ export default function TrialForm({ onSubmit, onCancel }: TrialFormProps) {
   const [grade, setGrade] = useState<StudentGrade>('6세');
   const [parentPhone, setParentPhone] = useState('');
   const [memo, setMemo] = useState('');
-  const [dayOfWeek, setDayOfWeek] = useState<DayOfWeek>('화');
+  const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [startTime, setStartTime] = useState('14:00');
   const [duration, setDuration] = useState<ClassDuration>(60);
 
+  // Derive day of week from selected date
+  const jsDay = getDay(parseISO(date)); // 0=Sun, 1=Mon, ...
+  const dayOfWeek: DayOfWeek | null = DAY_MAP[jsDay] || null;
+  const isSunday = jsDay === 0;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
-    onSubmit({ name: name.trim(), grade, parentPhone, memo, dayOfWeek, startTime, duration });
+    if (!name.trim() || !dayOfWeek) return;
+    onSubmit({ name: name.trim(), grade, parentPhone, memo, date, dayOfWeek, startTime, duration });
   };
 
   return (
@@ -81,14 +89,20 @@ export default function TrialForm({ onSubmit, onCancel }: TrialFormProps) {
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">요일</label>
-          <select
-            value={dayOfWeek}
-            onChange={e => setDayOfWeek(e.target.value as DayOfWeek)}
+          <label className="block text-sm font-medium text-gray-700 mb-1">수업 날짜 *</label>
+          <input
+            type="date"
+            value={date}
+            onChange={e => setDate(e.target.value)}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-          >
-            {DAYS_OF_WEEK.map(d => <option key={d} value={d}>{d}요일</option>)}
-          </select>
+            required
+          />
+          {dayOfWeek && (
+            <p className="text-xs text-gray-500 mt-1">{dayOfWeek}요일</p>
+          )}
+          {isSunday && (
+            <p className="text-xs text-red-500 mt-1">일요일은 수업이 없습니다.</p>
+          )}
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">시작 시간</label>
