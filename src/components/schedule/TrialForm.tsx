@@ -8,28 +8,40 @@ const STUDENT_GRADES: StudentGrade[] = ['6세', '7세', '초등1', '초등2', '�
 
 const DAY_MAP: Record<number, DayOfWeek> = { 1: '월', 2: '화', 3: '수', 4: '목', 5: '금', 6: '토' };
 
+export interface TrialFormData {
+  name: string;
+  grade: StudentGrade;
+  parentPhone: string;
+  memo: string;
+  date: string;
+  dayOfWeek: DayOfWeek;
+  startTime: string;
+  duration: ClassDuration;
+}
+
 interface TrialFormProps {
-  onSubmit: (data: {
+  initialData?: {
     name: string;
     grade: StudentGrade;
     parentPhone: string;
     memo: string;
-    date: string;
+    date?: string;
     dayOfWeek: DayOfWeek;
     startTime: string;
     duration: ClassDuration;
-  }) => void;
+  };
+  onSubmit: (data: TrialFormData) => void;
   onCancel: () => void;
 }
 
-export default function TrialForm({ onSubmit, onCancel }: TrialFormProps) {
-  const [name, setName] = useState('');
-  const [grade, setGrade] = useState<StudentGrade>('6세');
-  const [parentPhone, setParentPhone] = useState('');
-  const [memo, setMemo] = useState('');
-  const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [startTime, setStartTime] = useState('14:00');
-  const [duration, setDuration] = useState<ClassDuration>(60);
+export default function TrialForm({ initialData, onSubmit, onCancel }: TrialFormProps) {
+  const [name, setName] = useState(initialData?.name || '');
+  const [grade, setGrade] = useState<StudentGrade>(initialData?.grade || '6세');
+  const [parentPhone, setParentPhone] = useState(initialData?.parentPhone || '');
+  const [memo, setMemo] = useState(initialData?.memo || '');
+  const [date, setDate] = useState(initialData?.date || format(new Date(), 'yyyy-MM-dd'));
+  const [startTime, setStartTime] = useState(initialData?.startTime || '14:00');
+  const [duration, setDuration] = useState<ClassDuration>(initialData?.duration || 60);
 
   // Derive day of week from selected date
   const jsDay = getDay(parseISO(date)); // 0=Sun, 1=Mon, ...
@@ -152,7 +164,7 @@ export default function TrialForm({ onSubmit, onCancel }: TrialFormProps) {
 
       <div className="flex gap-3 pt-2">
         <button type="submit" className="flex-1 bg-emerald-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-emerald-700">
-          체험 수업 추가
+          {initialData ? '수정' : '체험 수업 추가'}
         </button>
         <button type="button" onClick={onCancel} className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-200">
           취소

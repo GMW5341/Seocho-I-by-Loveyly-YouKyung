@@ -8,15 +8,18 @@ import { formatCurrency } from '../../utils/helpers';
 import Badge from '../common/Badge';
 import Modal from '../common/Modal';
 import TrialForm from '../schedule/TrialForm';
+import type { TrialFormData } from '../schedule/TrialForm';
+import type { TrialStudent, TrialLesson } from '../../types';
 
 const PAYMENT_METHODS: PaymentMethod[] = ['계좌이체', '현금', '카드', '온누리상품권', '기타'];
 
 export default function TrialManager() {
-  const { trialStudents, trialLessons, updateTrialLesson, deleteTrialStudent, addTrialStudent, addTrialLesson, addSchedule } = useAppStore();
+  const { trialStudents, trialLessons, updateTrialStudent, updateTrialLesson, deleteTrialStudent, addTrialStudent, addTrialLesson, addSchedule, schedules, removeSchedule } = useAppStore();
   const [payingLessonId, setPayingLessonId] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('계좌이체');
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [showTrialForm, setShowTrialForm] = useState(false);
+  const [editingTrial, setEditingTrial] = useState<{ student: TrialStudent; lesson: TrialLesson } | null>(null);
 
   const handleAddTrial = useCallback((data: {
     name: string;
@@ -55,6 +58,42 @@ export default function TrialManager() {
     });
     setShowTrialForm(false);
   }, [addTrialStudent, addTrialLesson, addSchedule]);
+
+  const handleEditTrial = useCallback((data: TrialFormData) => {
+    if (!editingTrial) return;
+    const { student, lesson } = editingTrial;
+    // Update student info
+    updateTrialStudent(student.id, {
+      name: data.name,
+      grade: data.grade,
+      parentPhone: data.parentPhone,
+      memo: data.memo,
+    });
+    // Update lesson info
+    updateTrialLesson(lesson.id, {
+      dayOfWeek: data.dayOfWeek,
+      startTime: data.startTime,
+      duration: data.duration,
+      date: data.date,
+      amount: TRIAL_PRICING[data.duration],
+    });
+    // Update matching schedule slot
+    const trialSlot = schedules.find(s => s.isTrial && s.trialStudentId === student.id);
+    if (trialSlot) {
+      removeSchedule(trialSlot.id);
+      addSchedule({
+        studentId: '',
+        dayOfWeek: data.dayOfWeek,
+        startTime: data.startTime,
+        duration: data.duration,
+        isRegular: false,
+        isTrial: true,
+        trialStudentId: student.id,
+        date: data.date,
+      });
+    }
+    setEditingTrial(null);
+  }, [editingTrial, updateTrialStudent, updateTrialLesson, schedules, removeSchedule, addSchedule]);
 
   const trialData = useMemo(() => {
     return trialStudents.map(student => {
@@ -209,14 +248,25 @@ export default function TrialManager() {
                   {format(new Date(student.createdAt), 'MM/dd', { locale: ko })}
                 </td>
                 <td className="px-4 py-3">
-                  <button
-                    onClick={() => {
-                      if (confirm(`${student.name} 체험 기록을 삭제하시겠습니까?`)) deleteTrialStudent(student.id);
-                    }}
-                    className="text-xs text-red-600 hover:text-red-800 font-medium"
-                  >
-                    삭제
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        const lesson = lessons[0];
+                        if (lesson) setEditingTrial({ student, lesson });
+                      }}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                    >
+                      수정
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (confirm(`${student.name} 체험 기록을 삭제하시겠습니까?`)) deleteTrialStudent(student.id);
+                      }}
+                      className="text-xs text-red-600 hover:text-red-800 font-medium"
+                    >
+                      삭제
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -237,6 +287,26 @@ export default function TrialManager() {
           onSubmit={handleAddTrial}
           onCancel={() => setShowTrialForm(false)}
         />
+      </Modal>
+
+      {/* Edit Trial Modal */}
+      <Modal isOpen={!!editingTrial} onClose={() => setEditingTrial(null)} title="체험 수업 수정">
+        {editingTrial && (
+          <TrialForm
+            initialData={{
+              name: editingTrial.student.name,
+              grade: editingTrial.student.grade,
+              parentPhone: editingTrial.student.parentPhone,
+              memo: editingTrial.student.memo,
+              date: editingTrial.lesson.date,
+              dayOfWeek: editingTrial.lesson.dayOfWeek,
+              startTime: editingTrial.lesson.startTime,
+              duration: editingTrial.lesson.duration,
+            }}
+            onSubmit={handleEditTrial}
+            onCancel={() => setEditingTrial(null)}
+          />
+        )}
       </Modal>
 
       {/* Payment Modal */}
