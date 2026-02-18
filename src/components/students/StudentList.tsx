@@ -112,6 +112,7 @@ export default function StudentList() {
           placeholder="이름 검색..."
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
+          autoComplete="off"
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm flex-1 max-w-xs focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
         />
         <select

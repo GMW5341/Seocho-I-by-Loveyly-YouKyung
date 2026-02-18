@@ -134,6 +134,7 @@ export default function PaymentManager() {
             placeholder="이름 검색..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
+            autoComplete="off"
             className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm w-36 md:w-44 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
           />
           {searchQuery && (

@@ -505,6 +505,7 @@ export default function ScheduleGrid() {
               placeholder="원생 검색..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
+              autoComplete="off"
               className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-32 md:w-40 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
             />
             {searchQuery && (
@@ -584,7 +585,7 @@ export default function ScheduleGrid() {
       )}
 
       {/* Schedule Grid */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-auto">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-auto -mx-3 md:mx-0 rounded-none md:rounded-xl border-x-0 md:border-x" style={{ WebkitOverflowScrolling: 'touch' }}>
         <div className={selectedDay ? '' : 'min-w-[800px]'}>
           {/* Header */}
           <div className="flex bg-gray-50 border-b border-gray-200">

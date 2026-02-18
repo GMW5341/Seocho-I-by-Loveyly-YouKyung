@@ -213,7 +213,8 @@ export default function AttendanceManager() {
             type="text"
             placeholder="이름 검색..."
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
+            onChange={e => { setSearchQuery(e.target.value); setSelectedStudent('all'); }}
+            autoComplete="off"
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-36 md:w-44 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
           />
           {searchQuery && (
@@ -227,7 +228,7 @@ export default function AttendanceManager() {
         </div>
         <select
           value={selectedStudent}
-          onChange={e => setSelectedStudent(e.target.value)}
+          onChange={e => { setSelectedStudent(e.target.value); setSearchQuery(''); }}
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
         >
           <option value="all">전체 원생</option>

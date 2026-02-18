@@ -276,7 +276,7 @@ export default function CurriculumPage() {
                     <p className="text-xs text-gray-400">이미지 또는 PDF를 드래그하거나 클릭하여 업로드</p>
                   </div>
                 ) : (
-                  <div className="flex gap-4">
+                  <div className="flex flex-col md:flex-row gap-4">
                     {/* Current (latest) curriculum - large display, also a drop target */}
                     <div
                       className={`flex-1 min-w-0 rounded-lg transition-all ${
@@ -351,15 +351,15 @@ export default function CurriculumPage() {
                       )}
                     </div>
 
-                    {/* Past curricula - small thumbnails stacked on right */}
+                    {/* Past curricula - horizontal scroll on mobile, vertical stack on desktop */}
                     {pastFiles.length > 0 && (
-                      <div className="w-36 shrink-0 flex flex-col gap-2">
+                      <div className="md:w-36 shrink-0 flex flex-col gap-2">
                         <div className="text-[10px] font-medium text-gray-400 uppercase tracking-wider px-1">지난 커리큘럼</div>
-                        <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                        <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-x-visible md:overflow-y-auto md:max-h-[500px] pb-2 md:pb-0 md:pr-1">
                           {pastFiles.map(file => (
                             <div
                               key={file.id}
-                              className={`group/past relative border rounded-lg overflow-hidden cursor-pointer transition-all ${
+                              className={`group/past relative border rounded-lg overflow-hidden cursor-pointer transition-all shrink-0 w-28 md:w-auto ${
                                 dragSourceId === file.id
                                   ? 'opacity-40 border-gray-200'
                                   : dropTargetId === file.id
@@ -422,31 +422,32 @@ export default function CurriculumPage() {
       {/* Zoom Modal */}
       {zoomedFile && (
         <div
-          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 cursor-pointer"
+          className="fixed inset-0 bg-black/80 z-50 flex flex-col items-center justify-center p-2 md:p-4 cursor-pointer"
           onClick={() => setZoomedFile(null)}
         >
-          <div className="relative max-w-[95vw] max-h-[95vh]" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between w-full max-w-[95vw] px-1 mb-2">
+            <div className="text-white text-xs md:text-sm font-medium truncate max-w-[70%]">
+              {zoomedFile.name}
+            </div>
             <button
               onClick={() => setZoomedFile(null)}
-              className="absolute -top-10 right-0 text-white text-sm font-medium hover:text-gray-300 flex items-center gap-1"
+              className="text-white text-sm font-medium hover:text-gray-300 flex items-center gap-1 shrink-0"
             >
               닫기 ✕
             </button>
-            <div className="absolute -top-10 left-0 text-white text-sm font-medium truncate max-w-[60%]">
-              {zoomedFile.name}
-            </div>
-
+          </div>
+          <div className="relative max-w-[95vw] max-h-[85vh] overflow-auto" onClick={e => e.stopPropagation()} style={{ WebkitOverflowScrolling: 'touch' }}>
             {zoomedFile.type === 'image' ? (
               <img
                 src={getDataUrl(zoomedFile)}
                 alt={zoomedFile.name}
-                className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+                className="max-w-full md:max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl"
               />
             ) : (
               <iframe
                 src={getDataUrl(zoomedFile)}
                 title={zoomedFile.name}
-                className="w-[90vw] h-[90vh] rounded-lg bg-white"
+                className="w-[95vw] md:w-[90vw] h-[85vh] rounded-lg bg-white"
               />
             )}
           </div>

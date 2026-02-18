@@ -39,8 +39,12 @@
   }
 }
 
-/* Prevent horizontal scroll on mobile */
-html, body, #root {
+/* Prevent horizontal scroll on mobile - only on html/body, allow inner scroll containers */
+html, body {
   max-width: 100vw;
   overflow-x: hidden;
+}
+
+#root {
+  max-width: 100vw;
 }
