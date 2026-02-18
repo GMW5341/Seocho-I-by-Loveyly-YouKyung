@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react';
-import { format } from 'date-fns';
 import { useAppStore } from '../../store/StoreContext';
 import type { SpecialClass, SpecialClassStudent, StudentGrade, DayOfWeek, PaymentMethod, ExtraCharge } from '../../types';
 import { formatCurrency } from '../../utils/helpers';
