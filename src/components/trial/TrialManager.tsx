@@ -17,6 +17,7 @@ export default function TrialManager() {
   const { trialStudents, trialLessons, updateTrialStudent, updateTrialLesson, deleteTrialStudent, addTrialStudent, addTrialLesson, addSchedule, schedules, removeSchedule } = useAppStore();
   const [payingLessonId, setPayingLessonId] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('계좌이체');
+  const [paymentDate, setPaymentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [showTrialForm, setShowTrialForm] = useState(false);
   const [editingTrial, setEditingTrial] = useState<{ student: TrialStudent; lesson: TrialLesson } | null>(null);
@@ -125,7 +126,7 @@ export default function TrialManager() {
   const handlePayment = (lessonId: string) => {
     updateTrialLesson(lessonId, {
       paid: true,
-      paidAt: new Date().toISOString(),
+      paidAt: paymentDate,
       paymentMethod,
     });
     setPayingLessonId(null);
@@ -201,7 +202,7 @@ export default function TrialManager() {
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">수업 정보</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">금액</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">결제 상태</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">등록일</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">결제일</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">관리</th>
             </tr>
           </thead>
@@ -235,7 +236,10 @@ export default function TrialManager() {
                         </Badge>
                       ) : (
                         <button
-                          onClick={() => setPayingLessonId(l.id)}
+                          onClick={() => {
+                            setPaymentDate(format(new Date(), 'yyyy-MM-dd'));
+                            setPayingLessonId(l.id);
+                          }}
                           className="text-xs bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded-full font-medium hover:bg-red-100"
                         >
                           미결제 - 결제하기
@@ -245,7 +249,11 @@ export default function TrialManager() {
                   ))}
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-500">
-                  {format(new Date(student.createdAt), 'MM/dd', { locale: ko })}
+                  {lessons.map(l => (
+                    <div key={l.id}>
+                      {l.paid && l.paidAt ? format(parseISO(l.paidAt), 'MM/dd', { locale: ko }) : '-'}
+                    </div>
+                  ))}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex gap-2">
@@ -342,6 +350,15 @@ export default function TrialManager() {
                       </button>
                     ))}
                   </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">결제일</label>
+                  <input
+                    type="date"
+                    value={paymentDate}
+                    onChange={e => setPaymentDate(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  />
                 </div>
                 <div className="flex gap-3 pt-2">
                   <button
