@@ -193,6 +193,83 @@ export default function PaymentForm({ students, settings, payment, isPastMode, o
         </div>
       </div>
 
+      {/* Schedule Section - right after session count, before price */}
+      {!isPastMode && studentId && (
+        <div className="bg-blue-50 rounded-lg p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="block text-sm font-bold text-gray-800">수업 스케줄</label>
+            {selectedStudent?.regularSchedule?.length ? (
+              <span className="text-xs text-blue-600">기존 스케줄이 자동 로드되었습니다</span>
+            ) : null}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">주당 수업 횟수</label>
+            <div className="flex gap-2">
+              {[1, 2, 3, 4, 5].map(n => (
+                <button
+                  type="button"
+                  key={n}
+                  onClick={() => handleSessionsPerWeekChange(n)}
+                  className={`flex-1 px-2 py-1.5 rounded-lg text-sm font-medium border ${
+                    sessionsPerWeek === n
+                      ? 'bg-blue-500 border-blue-500 text-white'
+                      : 'border-gray-300 text-gray-600 hover:bg-white'
+                  }`}
+                >
+                  주{n}회
+                </button>
+              ))}
+            </div>
+          </div>
+          {sessionsPerWeek > 0 && (
+            <div className="space-y-2">
+              <label className="block text-xs font-medium text-gray-600">요일 및 시간 ({sessionsPerWeek}회 수업)</label>
+              {regularSchedule.map((entry, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 w-6">{i + 1}.</span>
+                  <div className="flex gap-1">
+                    {DAYS.map(d => (
+                      <button
+                        type="button"
+                        key={d}
+                        onClick={() => {
+                          const updated = [...regularSchedule];
+                          updated[i] = { ...updated[i], day: d };
+                          setRegularSchedule(updated);
+                        }}
+                        className={`w-8 h-8 rounded-full text-xs font-medium border ${
+                          entry.day === d
+                            ? 'bg-blue-500 border-blue-500 text-white'
+                            : 'border-gray-300 text-gray-500 hover:bg-white'
+                        }`}
+                      >
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                  <select
+                    value={entry.startTime}
+                    onChange={e => {
+                      const updated = [...regularSchedule];
+                      updated[i] = { ...updated[i], startTime: e.target.value };
+                      setRegularSchedule(updated);
+                    }}
+                    className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm flex-1"
+                  >
+                    {TIME_SLOTS.map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+          )}
+          {sessionsPerWeek === 0 && (
+            <p className="text-xs text-gray-400">주당 수업 횟수를 선택하면 요일/시간을 설정할 수 있습니다.</p>
+          )}
+        </div>
+      )}
+
       {/* Price section */}
       <div className="bg-gray-50 rounded-lg p-4 space-y-3">
         <div>
@@ -478,83 +555,6 @@ export default function PaymentForm({ students, settings, payment, isPastMode, o
           </div>
         )}
       </div>
-
-      {/* Schedule Section - only for non-past mode */}
-      {!isPastMode && studentId && (
-        <div className="bg-blue-50 rounded-lg p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <label className="block text-sm font-bold text-gray-800">수업 스케줄</label>
-            {selectedStudent?.regularSchedule?.length ? (
-              <span className="text-xs text-blue-600">기존 스케줄이 자동 로드되었습니다</span>
-            ) : null}
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">주당 수업 횟수</label>
-            <div className="flex gap-2">
-              {[1, 2, 3, 4, 5].map(n => (
-                <button
-                  type="button"
-                  key={n}
-                  onClick={() => handleSessionsPerWeekChange(n)}
-                  className={`flex-1 px-2 py-1.5 rounded-lg text-sm font-medium border ${
-                    sessionsPerWeek === n
-                      ? 'bg-blue-500 border-blue-500 text-white'
-                      : 'border-gray-300 text-gray-600 hover:bg-white'
-                  }`}
-                >
-                  주{n}회
-                </button>
-              ))}
-            </div>
-          </div>
-          {sessionsPerWeek > 0 && (
-            <div className="space-y-2">
-              <label className="block text-xs font-medium text-gray-600">요일 및 시간 ({sessionsPerWeek}회 수업)</label>
-              {regularSchedule.map((entry, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500 w-6">{i + 1}.</span>
-                  <div className="flex gap-1">
-                    {DAYS.map(d => (
-                      <button
-                        type="button"
-                        key={d}
-                        onClick={() => {
-                          const updated = [...regularSchedule];
-                          updated[i] = { ...updated[i], day: d };
-                          setRegularSchedule(updated);
-                        }}
-                        className={`w-8 h-8 rounded-full text-xs font-medium border ${
-                          entry.day === d
-                            ? 'bg-blue-500 border-blue-500 text-white'
-                            : 'border-gray-300 text-gray-500 hover:bg-white'
-                        }`}
-                      >
-                        {d}
-                      </button>
-                    ))}
-                  </div>
-                  <select
-                    value={entry.startTime}
-                    onChange={e => {
-                      const updated = [...regularSchedule];
-                      updated[i] = { ...updated[i], startTime: e.target.value };
-                      setRegularSchedule(updated);
-                    }}
-                    className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm flex-1"
-                  >
-                    {TIME_SLOTS.map(t => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
-              ))}
-            </div>
-          )}
-          {sessionsPerWeek === 0 && (
-            <p className="text-xs text-gray-400">주당 수업 횟수를 선택하면 요일/시간을 설정할 수 있습니다.</p>
-          )}
-        </div>
-      )}
 
       <div className={isPastMode ? 'grid grid-cols-2 gap-4' : 'grid grid-cols-2 gap-4'}>
         <div>
