@@ -72,16 +72,50 @@ export default function PaymentManager() {
 
   // All payment records for history view
   const paymentHistory = useMemo(() => {
+    const holidayDates = expandHolidayDates(holidays);
     const allRecords = payments.map(p => {
       const student = students.find(s => s.id === p.studentId);
-      return { payment: p, studentName: student?.name || '(삭제된 원생)', studentLevel: student?.level || '' };
+
+      // Calculate last class date for this payment record
+      let lastClassDate: string | null = null;
+      if (student) {
+        // Find actual attendance dates during this payment period
+        const paymentAttendance = attendance
+          .filter(r => r.studentId === p.studentId && (r.status === '출석' || r.status === '보강'))
+          .map(r => r.date)
+          .sort();
+
+        if (p.completed && paymentAttendance.length > 0) {
+          // For completed payments: use the last actual attendance date
+          lastClassDate = paymentAttendance[paymentAttendance.length - 1];
+        } else if (!p.completed) {
+          // For active payments: calculate projected last class date
+          const studentAttendance = attendance
+            .filter(r => r.studentId === student.id)
+            .map(r => ({ date: r.date, status: r.status }));
+          lastClassDate = calculateLastClassDate(
+            p.startDate,
+            p.totalSessions,
+            student.regularSchedule || [],
+            holidayDates,
+            studentAttendance
+          );
+        }
+      }
+
+      return {
+        payment: p,
+        studentName: student?.name || '(삭제된 원생)',
+        studentLevel: student?.level || '',
+        lastClassDate,
+      };
     });
     let filtered = allRecords;
     if (historySearchQuery) {
       filtered = filtered.filter(r => r.studentName.includes(historySearchQuery));
     }
     return filtered.sort((a, b) => b.payment.paidAt.localeCompare(a.payment.paidAt));
-  }, [payments, students, historySearchQuery]);
+  }, [payments, students, historySearchQuery, attendance, holidays]);
 
   const handleAddPayment = (data: Omit<Payment, 'id' | 'usedSessions' | 'remainingSessions' | 'completed'> & { isPastRecord?: boolean }) => {
     const { isPastRecord, ...paymentData } = data;
@@ -375,16 +409,17 @@ export default function PaymentManager() {
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">원생</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">수업</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">금액</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">횟수</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">차감</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">상태</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">결제방식</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">결제일</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">마지막 수업일</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">메모</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">관리</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {paymentHistory.map(({ payment: p, studentName, studentLevel }) => (
+                  {paymentHistory.map(({ payment: p, studentName, studentLevel, lastClassDate }) => (
                     <tr key={p.id} className={`hover:bg-gray-50 ${p.completed ? 'bg-gray-50/50' : ''}`}>
                       <td className="px-4 py-3">
                         <div className="text-sm font-medium text-gray-900">{studentName}</div>
@@ -402,8 +437,21 @@ export default function PaymentManager() {
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {p.usedSessions}/{p.totalSessions}회
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium text-gray-900">
+                            {p.remainingSessions}/{p.totalSessions}회
+                          </span>
+                          <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                            <div
+                              className={`h-1.5 rounded-full ${p.completed ? 'bg-gray-400' : p.remainingSessions <= 1 ? 'bg-red-500' : 'bg-indigo-500'}`}
+                              style={{ width: `${Math.round((p.usedSessions / p.totalSessions) * 100)}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-gray-400 mt-0.5">
+                            {p.usedSessions}회 차감
+                          </span>
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         {p.completed ? (
@@ -425,6 +473,31 @@ export default function PaymentManager() {
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600">
                         {format(parseISO(p.paidAt), 'yyyy.MM.dd', { locale: ko })}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        {lastClassDate ? (() => {
+                          const daysFromNow = differenceInCalendarDays(parseISO(lastClassDate), new Date());
+                          const isPast = daysFromNow < 0;
+                          return (
+                            <div className="flex flex-col">
+                              <span className={`font-medium ${isPast ? 'text-gray-500' : 'text-gray-700'}`}>
+                                {format(parseISO(lastClassDate), 'MM/dd (EEE)', { locale: ko })}
+                              </span>
+                              {p.completed && isPast && (
+                                <span className="text-xs text-gray-400 mt-0.5">
+                                  {Math.abs(daysFromNow)}일 전 종료
+                                </span>
+                              )}
+                              {!p.completed && (
+                                <span className={`text-xs mt-0.5 ${isPast ? 'text-red-500' : daysFromNow <= 7 ? 'text-amber-500' : 'text-gray-400'}`}>
+                                  {isPast ? `${Math.abs(daysFromNow)}일 지남` : `D-${daysFromNow}`}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })() : (
+                          <span className="text-gray-400">-</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-500 max-w-[120px] truncate" title={p.memo || ''}>
                         {p.memo || '-'}
@@ -453,7 +526,7 @@ export default function PaymentManager() {
                   ))}
                   {paymentHistory.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="px-4 py-12 text-center text-sm text-gray-400">
+                      <td colSpan={10} className="px-4 py-12 text-center text-sm text-gray-400">
                         결제 내역이 없습니다.
                       </td>
                     </tr>

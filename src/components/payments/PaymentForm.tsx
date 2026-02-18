@@ -133,8 +133,8 @@ export default function PaymentForm({ students, settings, payment, isPastMode, o
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">결제 횟수</label>
-          <div className="flex gap-2">
-            {[3, 4, 5, 8].map(n => (
+          <div className="flex gap-2 flex-wrap">
+            {[3, 4, 5, 8, 12, 16].map(n => (
               <button
                 type="button"
                 key={n}
@@ -153,7 +153,6 @@ export default function PaymentForm({ students, settings, payment, isPastMode, o
             onChange={e => setTotalSessions(Math.max(1, Number(e.target.value)))}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-2"
             min={1}
-            max={20}
           />
         </div>
       </div>
