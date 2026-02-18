@@ -17,7 +17,7 @@ export default function TrialManager() {
   const { trialStudents, trialLessons, updateTrialStudent, updateTrialLesson, deleteTrialStudent, addTrialStudent, addTrialLesson, addSchedule, schedules, removeSchedule } = useAppStore();
   const [payingLessonId, setPayingLessonId] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('계좌이체');
-  const [paymentDate, setPaymentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [paymentDate, setPaymentDate] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [showTrialForm, setShowTrialForm] = useState(false);
   const [editingTrial, setEditingTrial] = useState<{ student: TrialStudent; lesson: TrialLesson } | null>(null);
@@ -126,7 +126,7 @@ export default function TrialManager() {
   const handlePayment = (lessonId: string) => {
     updateTrialLesson(lessonId, {
       paid: true,
-      paidAt: paymentDate,
+      paidAt: paymentDate || undefined,
       paymentMethod,
     });
     setPayingLessonId(null);
@@ -237,7 +237,7 @@ export default function TrialManager() {
                       ) : (
                         <button
                           onClick={() => {
-                            setPaymentDate(format(new Date(), 'yyyy-MM-dd'));
+                            setPaymentDate('');
                             setPayingLessonId(l.id);
                           }}
                           className="text-xs bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded-full font-medium hover:bg-red-100"
@@ -251,7 +251,14 @@ export default function TrialManager() {
                 <td className="px-4 py-3 text-sm text-gray-500">
                   {lessons.map(l => (
                     <div key={l.id}>
-                      {l.paid && l.paidAt ? format(parseISO(l.paidAt), 'MM/dd', { locale: ko }) : '-'}
+                      {l.paid ? (
+                        <input
+                          type="date"
+                          value={l.paidAt || ''}
+                          onChange={e => updateTrialLesson(l.id, { paidAt: e.target.value || undefined })}
+                          className="border border-transparent hover:border-gray-300 rounded px-1 py-0.5 text-xs w-[7rem] bg-transparent focus:border-indigo-400 focus:ring-1 focus:ring-indigo-300"
+                        />
+                      ) : '-'}
                     </div>
                   ))}
                 </td>

@@ -169,6 +169,11 @@ export interface SpecialClass {
   createdAt: string;
 }
 
+export interface ExtraCharge {
+  label: string;
+  amount: number;
+}
+
 export interface SpecialClassStudent {
   id: string;
   specialClassId: string;
@@ -178,6 +183,7 @@ export interface SpecialClassStudent {
   parentPhone: string;
   paid: boolean;
   amount: number;
+  extraCharges?: ExtraCharge[];
   paymentMethod?: PaymentMethod;
   paidAt?: string;
   memo: string;

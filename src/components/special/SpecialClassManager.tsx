@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
+import { format } from 'date-fns';
 import { useAppStore } from '../../store/StoreContext';
-import type { SpecialClass, SpecialClassStudent, StudentGrade, DayOfWeek, PaymentMethod } from '../../types';
+import type { SpecialClass, SpecialClassStudent, StudentGrade, DayOfWeek, PaymentMethod, ExtraCharge } from '../../types';
 import { formatCurrency } from '../../utils/helpers';
 import Modal from '../common/Modal';
 import Badge from '../common/Badge';
@@ -35,6 +36,7 @@ export default function SpecialClassManager() {
   // Payment popup state
   const [payingStudentId, setPayingStudentId] = useState<string | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>('계좌이체');
+  const [paymentDate, setPaymentDate] = useState('');
 
   // Student form state
   const [studentName, setStudentName] = useState('');
@@ -42,6 +44,10 @@ export default function SpecialClassManager() {
   const [studentPhone, setStudentPhone] = useState('');
   const [studentParentPhone, setStudentParentPhone] = useState('');
   const [studentMemo, setStudentMemo] = useState('');
+  const [studentExtraCharges, setStudentExtraCharges] = useState<ExtraCharge[]>([]);
+
+  const getStudentTotal = (s: SpecialClassStudent) =>
+    s.amount + (s.extraCharges?.reduce((sum, c) => sum + c.amount, 0) || 0);
 
   const isVacation = settings.currentSeason === '방학중';
 
@@ -69,6 +75,7 @@ export default function SpecialClassManager() {
     setStudentPhone('');
     setStudentParentPhone('');
     setStudentMemo('');
+    setStudentExtraCharges([]);
     setEditingStudent(null);
   };
 
@@ -97,6 +104,7 @@ export default function SpecialClassManager() {
       setStudentPhone(student.phone);
       setStudentParentPhone(student.parentPhone);
       setStudentMemo(student.memo);
+      setStudentExtraCharges(student.extraCharges ? [...student.extraCharges] : []);
     } else {
       resetStudentForm();
     }
@@ -127,14 +135,16 @@ export default function SpecialClassManager() {
 
   const handleStudentSubmit = () => {
     if (!studentName.trim() || !selectedClassId) return;
+    const validExtraCharges = studentExtraCharges.filter(c => c.label.trim() && c.amount > 0);
     const data = {
       specialClassId: selectedClassId,
       name: studentName,
       grade: studentGrade,
       phone: studentPhone,
       parentPhone: studentParentPhone,
-      paid: false,
+      paid: editingStudent ? editingStudent.paid : false,
       amount: selectedClass?.fee || 0,
+      extraCharges: validExtraCharges.length > 0 ? validExtraCharges : undefined,
       memo: studentMemo,
     };
     if (editingStudent) {
@@ -163,7 +173,7 @@ export default function SpecialClassManager() {
   const handleSpecialPayment = (studentId: string) => {
     updateSpecialClassStudent(studentId, {
       paid: true,
-      paidAt: new Date().toISOString(),
+      paidAt: paymentDate || undefined,
       paymentMethod: selectedPaymentMethod,
     });
     setPayingStudentId(null);
@@ -180,7 +190,7 @@ export default function SpecialClassManager() {
   };
 
   const paidCount = classStudents.filter(s => s.paid).length;
-  const totalRevenue = classStudents.filter(s => s.paid).reduce((sum, s) => sum + s.amount, 0);
+  const totalRevenue = classStudents.filter(s => s.paid).reduce((sum, s) => sum + getStudentTotal(s), 0);
 
   return (
     <div className="p-3 md:p-6">
@@ -314,6 +324,7 @@ export default function SpecialClassManager() {
                   <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">학년</th>
                   <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">학부모 연락처</th>
                   <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">결제</th>
+                  <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">결제일</th>
                   <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">금액</th>
                   <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">메모</th>
                   <th className="text-left px-4 py-2 text-xs font-medium text-gray-500">관리</th>
@@ -338,14 +349,37 @@ export default function SpecialClassManager() {
                         </button>
                       ) : (
                         <button
-                          onClick={() => setPayingStudentId(student.id)}
+                          onClick={() => {
+                            setPaymentDate('');
+                            setPayingStudentId(student.id);
+                          }}
                           className="text-xs bg-red-50 text-red-600 border border-red-200 px-2 py-0.5 rounded-full font-medium hover:bg-red-100"
                         >
                           미결제 - 결제하기
                         </button>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{formatCurrency(student.amount)}</td>
+                    <td className="px-4 py-3 text-sm text-gray-500">
+                      {student.paid ? (
+                        <input
+                          type="date"
+                          value={student.paidAt || ''}
+                          onChange={e => updateSpecialClassStudent(student.id, { paidAt: e.target.value || undefined })}
+                          className="border border-transparent hover:border-gray-300 rounded px-1 py-0.5 text-xs w-[7rem] bg-transparent focus:border-indigo-400 focus:ring-1 focus:ring-indigo-300"
+                        />
+                      ) : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <div className="text-gray-900 font-medium">{formatCurrency(getStudentTotal(student))}</div>
+                      {student.extraCharges && student.extraCharges.length > 0 && (
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          수강료 {formatCurrency(student.amount)}
+                          {student.extraCharges.map((c, i) => (
+                            <span key={i}> + {c.label} {formatCurrency(c.amount)}</span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-sm text-gray-500 max-w-[150px] truncate" title={student.memo}>{student.memo || '-'}</td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2">
@@ -369,7 +403,7 @@ export default function SpecialClassManager() {
                 ))}
                 {classStudents.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-sm text-gray-400">
+                    <td colSpan={8} className="px-4 py-12 text-center text-sm text-gray-400">
                       등록된 수강생이 없습니다.
                     </td>
                   </tr>
@@ -524,7 +558,15 @@ export default function SpecialClassManager() {
                 <div className="bg-gray-50 rounded-lg p-3 text-sm">
                   <div className="font-medium text-gray-900">{student.name} ({student.grade})</div>
                   {cls && <div className="text-gray-600">{cls.name}</div>}
-                  <div className="text-lg font-bold text-gray-900 mt-1">{formatCurrency(student.amount)}</div>
+                  <div className="text-lg font-bold text-gray-900 mt-1">{formatCurrency(getStudentTotal(student))}</div>
+                  {student.extraCharges && student.extraCharges.length > 0 && (
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      수강료 {formatCurrency(student.amount)}
+                      {student.extraCharges.map((c, i) => (
+                        <span key={i}> + {c.label} {formatCurrency(c.amount)}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">결제 방식</label>
@@ -543,6 +585,15 @@ export default function SpecialClassManager() {
                       </button>
                     ))}
                   </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">결제일</label>
+                  <input
+                    type="date"
+                    value={paymentDate}
+                    onChange={e => setPaymentDate(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  />
                 </div>
                 <div className="flex gap-3 pt-2">
                   <button
@@ -617,6 +668,62 @@ export default function SpecialClassManager() {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none h-16"
             />
           </div>
+
+          {/* Extra charges */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-gray-700">기타 매출 항목</label>
+              <button
+                onClick={() => setStudentExtraCharges(prev => [...prev, { label: '', amount: 0 }])}
+                className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+              >
+                + 항목 추가
+              </button>
+            </div>
+            {studentExtraCharges.map((charge, i) => (
+              <div key={i} className="flex gap-2 mb-2 items-center">
+                <input
+                  type="text"
+                  value={charge.label}
+                  onChange={e => {
+                    const updated = [...studentExtraCharges];
+                    updated[i] = { ...updated[i], label: e.target.value };
+                    setStudentExtraCharges(updated);
+                  }}
+                  placeholder="항목명 (예: 아이패드 대여비)"
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+                />
+                <div className="relative w-28">
+                  <input
+                    type="number"
+                    value={charge.amount || ''}
+                    onChange={e => {
+                      const updated = [...studentExtraCharges];
+                      updated[i] = { ...updated[i], amount: Number(e.target.value) };
+                      setStudentExtraCharges(updated);
+                    }}
+                    placeholder="금액"
+                    min={0}
+                    step={1000}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm pr-8"
+                  />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">원</span>
+                </div>
+                <button
+                  onClick={() => setStudentExtraCharges(prev => prev.filter((_, idx) => idx !== i))}
+                  className="text-red-500 hover:text-red-700 text-sm shrink-0"
+                >
+                  &times;
+                </button>
+              </div>
+            ))}
+            {studentExtraCharges.length > 0 && (
+              <p className="text-xs text-gray-500 mt-1">
+                수강료 {formatCurrency(selectedClass?.fee || 0)} + 기타 {formatCurrency(studentExtraCharges.reduce((s, c) => s + (c.amount || 0), 0))} = 총 {formatCurrency((selectedClass?.fee || 0) + studentExtraCharges.reduce((s, c) => s + (c.amount || 0), 0))}
+              </p>
+            )}
+          </div>
+
           <div className="flex gap-2 pt-2">
             <button
               onClick={handleStudentSubmit}

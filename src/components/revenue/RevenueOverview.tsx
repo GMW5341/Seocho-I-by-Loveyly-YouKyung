@@ -5,6 +5,9 @@ import { useAppStore } from '../../store/StoreContext';
 import { formatCurrency } from '../../utils/helpers';
 import { exportRevenueToExcel } from '../../utils/excelExport';
 
+const getSpecialTotal = (s: { amount: number; extraCharges?: { label: string; amount: number }[] }) =>
+  s.amount + (s.extraCharges?.reduce((sum, c) => sum + c.amount, 0) || 0);
+
 export default function RevenueOverview() {
   const { payments, trialLessons, specialClasses, specialClassStudents, students, trialStudents } = useAppStore();
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
@@ -49,7 +52,7 @@ export default function RevenueOverview() {
       const date = parseISO(s.paidAt);
       return isWithinInterval(date, { start: yearStart, end: yearEnd });
     });
-    const specialAllTime = specialClassStudents.filter(s => s.paid).reduce((sum, s) => sum + s.amount, 0);
+    const specialAllTime = specialClassStudents.filter(s => s.paid).reduce((sum, s) => sum + getSpecialTotal(s), 0);
 
     // Payment method breakdown (regular)
     const byMethod: Record<string, number> = {};
@@ -65,7 +68,7 @@ export default function RevenueOverview() {
     // Special class payment methods
     monthSpecial.forEach(s => {
       if (s.paymentMethod) {
-        byMethod[s.paymentMethod] = (byMethod[s.paymentMethod] || 0) + s.amount;
+        byMethod[s.paymentMethod] = (byMethod[s.paymentMethod] || 0) + getSpecialTotal(s);
       }
     });
 
@@ -81,7 +84,7 @@ export default function RevenueOverview() {
     });
     yearSpecial.forEach(s => {
       if (s.paymentMethod) {
-        yearByMethod[s.paymentMethod] = (yearByMethod[s.paymentMethod] || 0) + s.amount;
+        yearByMethod[s.paymentMethod] = (yearByMethod[s.paymentMethod] || 0) + getSpecialTotal(s);
       }
     });
 
@@ -94,10 +97,10 @@ export default function RevenueOverview() {
 
     const regularMonthTotal = monthPayments.reduce((sum, p) => sum + p.amount, 0);
     const trialMonthTotal = monthTrials.reduce((sum, l) => sum + l.amount, 0);
-    const specialMonthTotal = monthSpecial.reduce((sum, s) => sum + s.amount, 0);
+    const specialMonthTotal = monthSpecial.reduce((sum, s) => sum + getSpecialTotal(s), 0);
     const regularYearTotal = yearPayments.reduce((sum, p) => sum + p.amount, 0);
     const trialYearTotal = yearTrials.reduce((sum, l) => sum + l.amount, 0);
-    const specialYearTotal = yearSpecial.reduce((sum, s) => sum + s.amount, 0);
+    const specialYearTotal = yearSpecial.reduce((sum, s) => sum + getSpecialTotal(s), 0);
 
     return {
       monthTotal: regularMonthTotal + trialMonthTotal + specialMonthTotal,
@@ -132,7 +135,7 @@ export default function RevenueOverview() {
         .reduce((sum, l) => sum + l.amount, 0);
       const special = specialClassStudents
         .filter(s => s.paid && s.paidAt && isWithinInterval(parseISO(s.paidAt), { start: mStart, end: mEnd }))
-        .reduce((sum, s) => sum + s.amount, 0);
+        .reduce((sum, s) => sum + getSpecialTotal(s), 0);
       months.push({
         label: format(d, 'M월', { locale: ko }),
         total: regular + trial + special,

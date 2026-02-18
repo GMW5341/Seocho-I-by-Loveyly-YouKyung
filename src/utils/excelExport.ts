@@ -1,6 +1,9 @@
 import * as XLSX from 'xlsx';
 import type { Payment, TrialLesson, SpecialClassStudent, SpecialClass, Student } from '../types';
 
+const getSpecialStudentTotal = (s: SpecialClassStudent) =>
+  s.amount + (s.extraCharges?.reduce((sum, c) => sum + c.amount, 0) || 0);
+
 interface PaymentExportRow {
   구분: string;
   이름: string;
@@ -169,7 +172,7 @@ export function exportRevenueToExcel(options: RevenueExportOptions) {
         이름: s.name,
         학년: s.grade,
         수업시간: sc ? `${sc.duration}분` : '',
-        결제금액: s.amount,
+        결제금액: getSpecialStudentTotal(s),
         결제방식: s.paymentMethod || '',
         결제일: s.paidAt || '',
         메모: s.memo || '',
@@ -227,7 +230,7 @@ export function exportRevenueToExcel(options: RevenueExportOptions) {
         구분: `특강(${sc?.name || ''})`,
         이름: s.name,
         수업시간: sc ? `${sc.duration}분` : '',
-        결제금액: s.amount,
+        결제금액: getSpecialStudentTotal(s),
         결제방식: s.paymentMethod || '',
         결제일: s.paidAt || '',
       });
@@ -253,7 +256,7 @@ export function exportRevenueToExcel(options: RevenueExportOptions) {
       .reduce((sum, l) => sum + l.amount, 0);
     const specialTotal = specialClassStudents
       .filter(s => s.paid && s.paidAt && inRange(s.paidAt, ms, me))
-      .reduce((sum, s) => sum + s.amount, 0);
+      .reduce((sum, s) => sum + getSpecialStudentTotal(s), 0);
 
     summaryRows.push({
       월: `${m}월`,
@@ -298,7 +301,7 @@ export function exportRevenueToExcel(options: RevenueExportOptions) {
         .reduce((sum, l) => sum + l.amount, 0);
       const specialAmount = specialClassStudents
         .filter(s => s.paid && s.paidAt && s.paymentMethod === method && inRange(s.paidAt, ms, me))
-        .reduce((sum, s) => sum + s.amount, 0);
+        .reduce((sum, s) => sum + getSpecialStudentTotal(s), 0);
       const v = payAmount + trialAmount + specialAmount;
       row[method] = v;
       total += v;
