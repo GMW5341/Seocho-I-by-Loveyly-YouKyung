@@ -12,6 +12,7 @@ interface PaymentExportRow {
   결제금액: number;
   할인전금액: number | string;
   할인율: string;
+  기타할인: string;
   결제방식: string;
   결제일: string;
   시작일: string;
@@ -44,7 +45,10 @@ export function exportPaymentsToExcel(
         결제금액: p.amount,
         할인전금액: p.originalAmount ?? '',
         할인율: p.discountRate ? `${p.discountRate}%` : '',
-        결제방식: p.method,
+        기타할인: p.extraDiscounts?.map(d => `${d.label}(${d.type === 'rate' ? `${d.value}%` : `${d.value}원`})`).join(', ') || '',
+        결제방식: p.splitPayments?.length
+          ? p.splitPayments.map(sp => `${sp.method} ${sp.amount.toLocaleString()}원`).join(' / ')
+          : p.method,
         결제일: p.paidAt,
         시작일: p.startDate,
         총횟수: p.totalSessions,
@@ -66,6 +70,7 @@ export function exportPaymentsToExcel(
     { wch: 14 }, // 결제금액
     { wch: 14 }, // 할인전금액
     { wch: 8 },  // 할인율
+    { wch: 24 }, // 기타할인
     { wch: 12 }, // 결제방식
     { wch: 12 }, // 결제일
     { wch: 12 }, // 시작일
@@ -137,7 +142,9 @@ export function exportRevenueToExcel(options: RevenueExportOptions) {
         학년: student?.grade || '',
         수업시간: `${p.classDuration}분`,
         결제금액: p.amount,
-        결제방식: p.method,
+        결제방식: p.splitPayments?.length
+          ? p.splitPayments.map(sp => `${sp.method} ${sp.amount.toLocaleString()}원`).join(' / ')
+          : p.method,
         결제일: p.paidAt,
         메모: p.memo || '',
       });
@@ -199,7 +206,9 @@ export function exportRevenueToExcel(options: RevenueExportOptions) {
         이름: student?.name || '(삭제된 학생)',
         수업시간: `${p.classDuration}분`,
         결제금액: p.amount,
-        결제방식: p.method,
+        결제방식: p.splitPayments?.length
+          ? p.splitPayments.map(sp => `${sp.method} ${sp.amount.toLocaleString()}원`).join(' / ')
+          : p.method,
         결제일: p.paidAt,
       });
     });
@@ -294,8 +303,13 @@ export function exportRevenueToExcel(options: RevenueExportOptions) {
     let total = 0;
     methods.forEach(method => {
       const payAmount = payments
-        .filter(p => p.method === method && inRange(p.paidAt, ms, me))
-        .reduce((sum, p) => sum + p.amount, 0);
+        .filter(p => inRange(p.paidAt, ms, me))
+        .reduce((sum, p) => {
+          if (p.splitPayments?.length) {
+            return sum + p.splitPayments.filter(sp => sp.method === method).reduce((s, sp) => s + sp.amount, 0);
+          }
+          return p.method === method ? sum + p.amount : sum;
+        }, 0);
       const trialAmount = trialLessons
         .filter(l => l.paid && l.paidAt && l.paymentMethod === method && inRange(l.paidAt, ms, me))
         .reduce((sum, l) => sum + l.amount, 0);

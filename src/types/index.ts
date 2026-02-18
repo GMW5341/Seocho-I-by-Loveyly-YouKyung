@@ -69,10 +69,12 @@ export interface Payment {
   amount: number;
   originalAmount?: number; // 할인 전 원래 금액
   discountRate?: number; // 할인율 (%)
+  extraDiscounts?: ExtraDiscount[]; // 기타 할인 항목
   totalSessions: number; // 결제한 총 수업 횟수
   usedSessions: number; // 사용한 수업 횟수
   remainingSessions: number; // 남은 수업 횟수
   method: PaymentMethod;
+  splitPayments?: SplitPayment[]; // 분할 결제 시 각 방식별 금액
   startDate: string; // 결제 시작일
   paidAt: string; // 결제일
   classDuration: ClassDuration;
@@ -171,6 +173,17 @@ export interface SpecialClass {
 
 export interface ExtraCharge {
   label: string;
+  amount: number;
+}
+
+export interface ExtraDiscount {
+  label: string;
+  type: 'rate' | 'fixed'; // rate: 할인율(%), fixed: 할인금액(원)
+  value: number;
+}
+
+export interface SplitPayment {
+  method: PaymentMethod;
   amount: number;
 }
 

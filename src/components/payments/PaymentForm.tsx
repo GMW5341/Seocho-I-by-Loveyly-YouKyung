@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import type { Student, Payment, PaymentMethod, ClassDuration, AcademySettings } from '../../types';
+import type { Student, Payment, PaymentMethod, ClassDuration, AcademySettings, ExtraDiscount, SplitPayment } from '../../types';
 import { formatCurrency, getPricePerSession } from '../../utils/helpers';
 
 interface PaymentFormProps {
@@ -23,7 +23,12 @@ export default function PaymentForm({ students, settings, payment, isPastMode, o
   const [discountRate, setDiscountRate] = useState(payment?.discountRate || 0);
   const [amount, setAmount] = useState(payment?.amount || 0);
   const [manualAmount, setManualAmount] = useState(false);
+  const [extraDiscounts, setExtraDiscounts] = useState<ExtraDiscount[]>(payment?.extraDiscounts || []);
   const [method, setMethod] = useState<PaymentMethod>(payment?.method || '카드');
+  const [isSplitPayment, setIsSplitPayment] = useState(!!payment?.splitPayments?.length);
+  const [splitPayments, setSplitPayments] = useState<SplitPayment[]>(
+    payment?.splitPayments || [{ method: '카드', amount: 0 }, { method: '현금', amount: 0 }]
+  );
   const [paidAt, setPaidAt] = useState(payment?.paidAt || format(new Date(), 'yyyy-MM-dd'));
   const [startDate, setStartDate] = useState(payment?.startDate || format(new Date(), 'yyyy-MM-dd'));
   const [memo, setMemo] = useState(payment?.memo || '');
@@ -39,13 +44,21 @@ export default function PaymentForm({ students, settings, payment, isPastMode, o
     }
   }, [totalSessions, classDuration, settings.pricing, manualAmount]);
 
+  // Calculate total extra discount amount
+  const extraDiscountTotal = extraDiscounts.reduce((sum, d) => {
+    if (d.type === 'fixed') return sum + d.value;
+    if (d.type === 'rate') return sum + Math.round(originalAmount * d.value / 100);
+    return sum;
+  }, 0);
+
   // Apply discount to calculate final amount
   useEffect(() => {
     if (!manualAmount) {
-      const discounted = Math.round(originalAmount * (1 - discountRate / 100));
-      setAmount(discounted);
+      const afterRate = Math.round(originalAmount * (1 - discountRate / 100));
+      const afterExtra = afterRate - extraDiscountTotal;
+      setAmount(Math.max(0, afterExtra));
     }
-  }, [originalAmount, discountRate, manualAmount]);
+  }, [originalAmount, discountRate, extraDiscountTotal, manualAmount]);
 
   // Auto-set duration from student selection
   useEffect(() => {
@@ -57,13 +70,16 @@ export default function PaymentForm({ students, settings, payment, isPastMode, o
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!studentId) return;
+    const activeSplits = isSplitPayment ? splitPayments.filter(sp => sp.amount > 0) : undefined;
     onSubmit({
       studentId,
       totalSessions,
       amount,
       originalAmount,
       discountRate,
-      method,
+      extraDiscounts: extraDiscounts.length > 0 ? extraDiscounts : undefined,
+      method: isSplitPayment && activeSplits?.length ? activeSplits[0].method : method,
+      splitPayments: activeSplits && activeSplits.length > 0 ? activeSplits : undefined,
       classDuration,
       paidAt,
       startDate: isPastMode ? paidAt : startDate,
@@ -222,6 +238,89 @@ export default function PaymentForm({ students, settings, payment, isPastMode, o
           )}
         </div>
 
+        {/* Extra Discounts */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-sm font-medium text-gray-700">기타 할인</label>
+            <button
+              type="button"
+              onClick={() => setExtraDiscounts([...extraDiscounts, { label: '', type: 'fixed', value: 0 }])}
+              className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+            >
+              + 할인 항목 추가
+            </button>
+          </div>
+          {extraDiscounts.length > 0 && (
+            <div className="space-y-2">
+              {extraDiscounts.map((d, i) => (
+                <div key={i} className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 p-2">
+                  <input
+                    type="text"
+                    placeholder="할인 사유 (예: 형제 할인)"
+                    value={d.label}
+                    onChange={e => {
+                      const updated = [...extraDiscounts];
+                      updated[i] = { ...updated[i], label: e.target.value };
+                      setExtraDiscounts(updated);
+                    }}
+                    className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-sm min-w-0"
+                  />
+                  <select
+                    value={d.type}
+                    onChange={e => {
+                      const updated = [...extraDiscounts];
+                      updated[i] = { ...updated[i], type: e.target.value as 'rate' | 'fixed', value: 0 };
+                      setExtraDiscounts(updated);
+                      setManualAmount(false);
+                    }}
+                    className="border border-gray-300 rounded px-2 py-1.5 text-sm w-20"
+                  >
+                    <option value="fixed">금액</option>
+                    <option value="rate">비율</option>
+                  </select>
+                  <div className="relative w-24">
+                    <input
+                      type="number"
+                      value={d.value}
+                      onChange={e => {
+                        const updated = [...extraDiscounts];
+                        const val = Number(e.target.value);
+                        updated[i] = { ...updated[i], value: d.type === 'rate' ? Math.max(0, Math.min(100, val)) : Math.max(0, val) };
+                        setExtraDiscounts(updated);
+                        setManualAmount(false);
+                      }}
+                      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm pr-8"
+                      min={0}
+                      max={d.type === 'rate' ? 100 : undefined}
+                    />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">
+                      {d.type === 'rate' ? '%' : '원'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExtraDiscounts(extraDiscounts.filter((_, idx) => idx !== i));
+                      setManualAmount(false);
+                    }}
+                    className="text-red-400 hover:text-red-600 text-sm px-1"
+                  >
+                    &times;
+                  </button>
+                </div>
+              ))}
+              {extraDiscountTotal > 0 && (
+                <p className="text-xs text-orange-600">
+                  기타 할인 합계: -{formatCurrency(extraDiscountTotal)}
+                </p>
+              )}
+            </div>
+          )}
+          {extraDiscounts.length === 0 && (
+            <p className="text-xs text-gray-400">형제 할인, 동네 주민 할인 등 추가 할인 항목을 등록하세요.</p>
+          )}
+        </div>
+
         {/* Final amount */}
         <div className="border-t border-gray-200 pt-3">
           <label className="block text-sm font-bold text-gray-800 mb-1">최종 결제 금액</label>
@@ -239,30 +338,110 @@ export default function PaymentForm({ students, settings, payment, isPastMode, o
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">원</span>
           </div>
-          {discountRate > 0 && (
+          {(discountRate > 0 || extraDiscountTotal > 0) && (
             <p className="text-xs text-gray-500 mt-1">
-              {formatCurrency(originalAmount)} - {discountRate}% = {formatCurrency(amount)}
+              {formatCurrency(originalAmount)}
+              {discountRate > 0 && ` - ${discountRate}%`}
+              {extraDiscountTotal > 0 && ` - 기타 ${formatCurrency(extraDiscountTotal)}`}
+              {` = ${formatCurrency(amount)}`}
             </p>
           )}
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">결제 방식</label>
-        <div className="flex flex-wrap gap-2">
-          {PAYMENT_METHODS.map(m => (
-            <button
-              type="button"
-              key={m}
-              onClick={() => setMethod(m)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${
-                method === m ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              {m}
-            </button>
-          ))}
+        <div className="flex items-center justify-between mb-1">
+          <label className="block text-sm font-medium text-gray-700">결제 방식</label>
+          <label className="flex items-center gap-1.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isSplitPayment}
+              onChange={e => setIsSplitPayment(e.target.checked)}
+              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span className="text-xs text-gray-600">분할 결제</span>
+          </label>
         </div>
+
+        {!isSplitPayment ? (
+          <div className="flex flex-wrap gap-2">
+            {PAYMENT_METHODS.map(m => (
+              <button
+                type="button"
+                key={m}
+                onClick={() => setMethod(m)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${
+                  method === m ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {splitPayments.map((sp, i) => (
+              <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg border border-gray-200 p-2">
+                <select
+                  value={sp.method}
+                  onChange={e => {
+                    const updated = [...splitPayments];
+                    updated[i] = { ...updated[i], method: e.target.value as PaymentMethod };
+                    setSplitPayments(updated);
+                  }}
+                  className="border border-gray-300 rounded px-2 py-1.5 text-sm flex-1"
+                >
+                  {PAYMENT_METHODS.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+                <div className="relative w-32">
+                  <input
+                    type="number"
+                    value={sp.amount}
+                    onChange={e => {
+                      const updated = [...splitPayments];
+                      updated[i] = { ...updated[i], amount: Math.max(0, Number(e.target.value)) };
+                      setSplitPayments(updated);
+                    }}
+                    className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm pr-8"
+                    min={0}
+                    placeholder="금액"
+                  />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">원</span>
+                </div>
+                {splitPayments.length > 2 && (
+                  <button
+                    type="button"
+                    onClick={() => setSplitPayments(splitPayments.filter((_, idx) => idx !== i))}
+                    className="text-red-400 hover:text-red-600 text-sm px-1"
+                  >
+                    &times;
+                  </button>
+                )}
+              </div>
+            ))}
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setSplitPayments([...splitPayments, { method: '기타', amount: 0 }])}
+                className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+              >
+                + 결제 방식 추가
+              </button>
+              {(() => {
+                const splitTotal = splitPayments.reduce((sum, sp) => sum + sp.amount, 0);
+                const diff = amount - splitTotal;
+                return (
+                  <span className={`text-xs font-medium ${diff === 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                    합계: {formatCurrency(splitTotal)}
+                    {diff !== 0 && ` (${diff > 0 ? '부족' : '초과'} ${formatCurrency(Math.abs(diff))})`}
+                  </span>
+                );
+              })()}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className={isPastMode ? '' : 'grid grid-cols-2 gap-4'}>

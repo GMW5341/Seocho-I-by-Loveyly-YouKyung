@@ -57,7 +57,13 @@ export default function RevenueOverview() {
     // Payment method breakdown (regular)
     const byMethod: Record<string, number> = {};
     monthPayments.forEach(p => {
-      byMethod[p.method] = (byMethod[p.method] || 0) + p.amount;
+      if (p.splitPayments?.length) {
+        p.splitPayments.forEach(sp => {
+          byMethod[sp.method] = (byMethod[sp.method] || 0) + sp.amount;
+        });
+      } else {
+        byMethod[p.method] = (byMethod[p.method] || 0) + p.amount;
+      }
     });
     // Trial payment methods
     monthTrials.forEach(l => {
@@ -75,7 +81,13 @@ export default function RevenueOverview() {
     // Year payment method breakdown
     const yearByMethod: Record<string, number> = {};
     yearPayments.forEach(p => {
-      yearByMethod[p.method] = (yearByMethod[p.method] || 0) + p.amount;
+      if (p.splitPayments?.length) {
+        p.splitPayments.forEach(sp => {
+          yearByMethod[sp.method] = (yearByMethod[sp.method] || 0) + sp.amount;
+        });
+      } else {
+        yearByMethod[p.method] = (yearByMethod[p.method] || 0) + p.amount;
+      }
     });
     yearTrials.forEach(l => {
       if (l.paymentMethod) {

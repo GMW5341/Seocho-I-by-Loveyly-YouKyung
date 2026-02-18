@@ -246,7 +246,13 @@ export default function PaymentManager() {
                   )}
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-600">
-                  {data.activePayment?.method || '-'}
+                  {data.activePayment?.splitPayments?.length ? (
+                    <span title={data.activePayment.splitPayments.map(sp => `${sp.method} ${formatCurrency(sp.amount)}`).join(' / ')}>
+                      {data.activePayment.splitPayments.map(sp => sp.method).join('+')}
+                    </span>
+                  ) : (
+                    data.activePayment?.method || '-'
+                  )}
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-600">
                   {data.activePayment ? format(parseISO(data.activePayment.paidAt), 'MM/dd', { locale: ko }) : '-'}
@@ -390,6 +396,11 @@ export default function PaymentManager() {
                         {p.discountRate ? (
                           <span className="text-xs text-orange-500 ml-1">({p.discountRate}%↓)</span>
                         ) : null}
+                        {p.extraDiscounts && p.extraDiscounts.length > 0 && (
+                          <span className="text-xs text-orange-500 ml-1" title={p.extraDiscounts.map(d => `${d.label}: ${d.type === 'rate' ? `${d.value}%` : formatCurrency(d.value)}`).join(', ')}>
+                            (+기타할인)
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600">
                         {p.usedSessions}/{p.totalSessions}회
@@ -405,7 +416,13 @@ export default function PaymentManager() {
                           <Badge variant="success">진행중</Badge>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{p.method}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {p.splitPayments?.length ? (
+                          <span title={p.splitPayments.map(sp => `${sp.method} ${formatCurrency(sp.amount)}`).join(' / ')}>
+                            {p.splitPayments.map(sp => sp.method).join('+')}
+                          </span>
+                        ) : p.method}
+                      </td>
                       <td className="px-4 py-3 text-sm text-gray-600">
                         {format(parseISO(p.paidAt), 'yyyy.MM.dd', { locale: ko })}
                       </td>
