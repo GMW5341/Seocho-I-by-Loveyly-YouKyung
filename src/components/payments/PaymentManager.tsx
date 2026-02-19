@@ -10,7 +10,7 @@ import Badge from '../common/Badge';
 import PaymentForm from './PaymentForm';
 
 export default function PaymentManager() {
-  const { students, payments, addPayment, updatePayment, deletePayment, updateStudent, schedules, addSchedule, removeSchedule, attendance, holidays, settings } = useAppStore();
+  const { students, payments, addPayment, updatePayment, deletePayment, updateStudent, attendance, holidays, settings } = useAppStore();
   const [showForm, setShowForm] = useState(false);
   const [showPastForm, setShowPastForm] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | undefined>();
@@ -117,34 +117,13 @@ export default function PaymentManager() {
     return filtered.sort((a, b) => b.payment.paidAt.localeCompare(a.payment.paidAt));
   }, [payments, students, historySearchQuery, attendance, holidays]);
 
-  const syncScheduleFromPayment = (studentId: string, paymentData: { regularSchedule?: { day: string; startTime: string }[]; sessionsPerWeek?: number; classDuration: number }) => {
+  const syncStudentFromPayment = (studentId: string, paymentData: { regularSchedule?: { day: string; startTime: string }[]; sessionsPerWeek?: number; classDuration: number }) => {
     if (!paymentData.regularSchedule?.length) return;
-    const student = students.find(s => s.id === studentId);
-    if (!student) return;
-
-    // Update student's schedule data
+    // Update student's schedule data (for reference in other components)
     updateStudent(studentId, {
       regularSchedule: paymentData.regularSchedule as any,
       sessionsPerWeek: paymentData.sessionsPerWeek || paymentData.regularSchedule.length,
       classDuration: paymentData.classDuration as any,
-    });
-
-    // Remove old regular schedule slots for this student
-    const oldSlots = schedules.filter(s => s.studentId === studentId && s.isRegular);
-    oldSlots.forEach(s => removeSchedule(s.id));
-    // Also remove override hidden markers
-    const overrideSlots = schedules.filter(s => s.studentId === studentId && s.isOverrideHidden);
-    overrideSlots.forEach(s => removeSchedule(s.id));
-
-    // Create new schedule slots
-    paymentData.regularSchedule.forEach(entry => {
-      addSchedule({
-        studentId,
-        dayOfWeek: entry.day as any,
-        startTime: entry.startTime,
-        duration: paymentData.classDuration as any,
-        isRegular: true,
-      });
     });
   };
 
@@ -159,7 +138,7 @@ export default function PaymentManager() {
       });
     } else {
       // Sync schedule from payment to student + schedule slots
-      syncScheduleFromPayment(paymentData.studentId, paymentData);
+      syncStudentFromPayment(paymentData.studentId, paymentData);
     }
     setShowForm(false);
     setShowPastForm(false);
@@ -185,7 +164,7 @@ export default function PaymentManager() {
       }
       // Sync schedule if it was updated in an active payment
       if (!editingPayment.completed && data.regularSchedule?.length) {
-        syncScheduleFromPayment(data.studentId, data);
+        syncStudentFromPayment(data.studentId, data);
       }
       setEditingPayment(undefined);
     }

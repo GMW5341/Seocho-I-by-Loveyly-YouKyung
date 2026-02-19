@@ -48,11 +48,11 @@ export default function AttendanceManager() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showCalendar]);
 
-  // Get scheduled times for a student on a day
+  // Get scheduled times for a student on a day - from active payment
   const getScheduledTimes = (studentId: string, dayOfWeek: DayOfWeek | null) => {
     if (!dayOfWeek) return [];
-    const student = activeStudents.find(s => s.id === studentId);
-    return (student?.regularSchedule || []).filter(entry => entry.day === dayOfWeek);
+    const activePayment = payments.find(p => p.studentId === studentId && !p.completed && p.remainingSessions > 0);
+    return (activePayment?.regularSchedule || []).filter(entry => entry.day === dayOfWeek);
   };
 
   // Get attendance record for a student on a specific date + startTime
@@ -73,12 +73,13 @@ export default function AttendanceManager() {
         updateAttendance(existing.id, { status });
       }
     } else {
+      const activePayment = payments.find(p => p.studentId === studentId && !p.completed && p.remainingSessions > 0);
       addAttendance({
         studentId,
         date,
         status,
         startTime,
-        duration: student.classDuration,
+        duration: activePayment?.classDuration || student.classDuration,
         isMakeup: status === '보강',
         memo: '',
       });
@@ -286,7 +287,7 @@ export default function AttendanceManager() {
                 <tr key={student.id} className="hover:bg-gray-50/50">
                   <td className="border-r border-gray-100 px-4 py-2 sticky left-0 bg-white z-10">
                     <div className="text-sm font-medium text-gray-900">{student.name}</div>
-                    <div className="text-xs text-gray-500">{student.level} | {student.classDuration}분</div>
+                    <div className="text-xs text-gray-500">{student.level} | {(payments.find(p => p.studentId === student.id && !p.completed && p.remainingSessions > 0)?.classDuration || student.classDuration)}분</div>
                   </td>
                   <td className="border-r border-gray-100 px-3 py-2 text-center">
                     <Badge variant={summary.remaining <= 1 ? 'danger' : summary.remaining <= 2 ? 'warning' : 'success'}>

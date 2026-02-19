@@ -71,7 +71,11 @@ export function useStore() {
       return { ...student, regularSchedule: [] } as Student;
     });
   });
-  const [schedules, setSchedules] = useState<ScheduleSlot[]>(() => loadFromStorage(STORAGE_KEYS.schedules, []));
+  const [schedules, setSchedules] = useState<ScheduleSlot[]>(() => {
+    // On load, remove old regular schedule slots - regular schedules are now derived from payments
+    const loaded = loadFromStorage<ScheduleSlot[]>(STORAGE_KEYS.schedules, []);
+    return loaded.filter(s => !s.isRegular);
+  });
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(() => loadFromStorage(STORAGE_KEYS.attendance, []));
   const [payments, setPayments] = useState<Payment[]>(() => loadFromStorage(STORAGE_KEYS.payments, []));
   const [holidays, setHolidays] = useState<Holiday[]>(() => loadFromStorage(STORAGE_KEYS.holidays, []));
@@ -92,35 +96,6 @@ export function useStore() {
   const [specialClasses, setSpecialClasses] = useState<SpecialClass[]>(() => loadFromStorage(STORAGE_KEYS.specialClasses, []));
   const [specialClassStudents, setSpecialClassStudents] = useState<SpecialClassStudent[]>(() => loadFromStorage(STORAGE_KEYS.specialClassStudents, []));
   const [logoDataUrl, setLogoDataUrl] = useState<string>(() => loadFromStorage(STORAGE_KEYS.logoDataUrl, ''));
-
-  // One-time startup sync: derive student.regularSchedule from actual schedule slots
-  const hasSynced = useRef(false);
-  useEffect(() => {
-    if (hasSynced.current) return;
-    hasSynced.current = true;
-
-    setStudents(prev => {
-      let changed = false;
-      const updated = prev.map(student => {
-        const regularSlots = schedules.filter(s => s.studentId === student.id && s.isRegular && !s.isOverrideHidden);
-        if (regularSlots.length === 0 && (!student.regularSchedule || student.regularSchedule.length === 0)) {
-          return student;
-        }
-        const derived = regularSlots
-          .map(s => ({ day: s.dayOfWeek, startTime: s.startTime }))
-          .sort((a, b) => a.day.localeCompare(b.day) || a.startTime.localeCompare(b.startTime));
-        const current = (student.regularSchedule || [])
-          .slice()
-          .sort((a, b) => a.day.localeCompare(b.day) || a.startTime.localeCompare(b.startTime));
-        const isSame = derived.length === current.length &&
-          derived.every((d, i) => d.day === current[i].day && d.startTime === current[i].startTime);
-        if (isSame) return student;
-        changed = true;
-        return { ...student, regularSchedule: derived };
-      });
-      return changed ? updated : prev;
-    });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cloud sync: debounced push (only after initial snapshot received to prevent empty data overwrite)
   const cloudSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

@@ -10,7 +10,7 @@ import Modal from '../common/Modal';
 import StudentForm from './StudentForm';
 
 export default function StudentList() {
-  const { students, schedules, addStudent, updateStudent, deleteStudent, permanentDeleteStudent, addSchedule, removeSchedule } = useAppStore();
+  const { students, addStudent, updateStudent, deleteStudent, permanentDeleteStudent } = useAppStore();
   const [showForm, setShowForm] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | undefined>();
   const [searchQuery, setSearchQuery] = useState('');
@@ -32,38 +32,13 @@ export default function StudentList() {
   }, [students, showInactive, filterLevel, searchQuery]);
 
   const handleAdd = (data: Omit<Student, 'id' | 'createdAt' | 'active'>) => {
-    const newStudent = addStudent(data);
-    // Auto-create schedule slots for regular schedule
-    (data.regularSchedule || []).forEach(entry => {
-      addSchedule({
-        studentId: newStudent.id,
-        dayOfWeek: entry.day,
-        startTime: entry.startTime,
-        duration: data.classDuration,
-        isRegular: true,
-      });
-    });
+    addStudent(data);
     setShowForm(false);
   };
 
   const handleEdit = (data: Omit<Student, 'id' | 'createdAt' | 'active'>) => {
     if (editingStudent) {
       updateStudent(editingStudent.id, data);
-      // Sync schedules: remove old regular schedules and override markers
-      const oldSlots = schedules.filter(s =>
-        s.studentId === editingStudent.id &&
-        (s.isRegular || s.isOverrideHidden)
-      );
-      oldSlots.forEach(slot => removeSchedule(slot.id));
-      (data.regularSchedule || []).forEach(entry => {
-        addSchedule({
-          studentId: editingStudent.id,
-          dayOfWeek: entry.day,
-          startTime: entry.startTime,
-          duration: data.classDuration,
-          isRegular: true,
-        });
-      });
       setEditingStudent(undefined);
     }
   };

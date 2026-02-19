@@ -180,42 +180,53 @@ export default function ScheduleGrid() {
     return markers;
   }, [timeRange]);
 
-  // Filter schedules
+  // Derive regular schedule slots from active payments (no longer stored in schedules)
   const filteredSchedules = useMemo(() => {
-    const weekStartStr = format(currentWeekStart, 'yyyy-MM-dd');
-    const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
+    const wkStart = format(currentWeekStart, 'yyyy-MM-dd');
+    const wkEnd = format(weekEnd, 'yyyy-MM-dd');
 
     // 이번 주에 숨김 처리된 정규 슬롯 목록 수집
     const hiddenOverrides = schedules.filter(s =>
-      s.isOverrideHidden && s.date && s.date >= weekStartStr && s.date <= weekEndStr
+      s.isOverrideHidden && s.date && s.date >= wkStart && s.date <= wkEnd
     );
 
-    return schedules.filter(s => {
-      // 숨김 마커 슬롯 자체는 표시하지 않음
-      if (s.isOverrideHidden) return false;
-
-      if (s.isRegular) {
-        // 이번 주에 이 정규 슬롯을 숨기는 오버라이드가 있는지 확인
-        const isHiddenThisWeek = hiddenOverrides.some(h =>
-          h.studentId === s.studentId &&
-          h.dayOfWeek === s.dayOfWeek &&
-          h.startTime === s.startTime
-        );
-        if (isHiddenThisWeek) return false;
-
-        const studentPayments = payments.filter(p => p.studentId === s.studentId);
-        if (studentPayments.length > 0) {
-          const hasActive = studentPayments.some(p => !p.completed && p.remainingSessions > 0);
-          if (!hasActive) return false;
-        }
-        return true;
+    // 1. 활성 결제에서 정규 스케줄 슬롯 파생
+    const paymentDerivedSlots: ScheduleSlot[] = [];
+    activeStudents.forEach(student => {
+      const activePayment = payments.find(p => p.studentId === student.id && !p.completed && p.remainingSessions > 0);
+      if (activePayment?.regularSchedule?.length) {
+        activePayment.regularSchedule.forEach((entry, i) => {
+          const isHiddenThisWeek = hiddenOverrides.some(h =>
+            h.studentId === student.id &&
+            h.dayOfWeek === entry.day &&
+            h.startTime === entry.startTime
+          );
+          if (!isHiddenThisWeek) {
+            paymentDerivedSlots.push({
+              id: `pay-${activePayment.id}-${i}`,
+              studentId: student.id,
+              dayOfWeek: entry.day,
+              startTime: entry.startTime,
+              duration: activePayment.classDuration,
+              isRegular: true,
+            });
+          }
+        });
       }
+    });
+
+    // 2. 비정규 슬롯 (보강, 체험, 임시 이동 등) - store에서 가져옴
+    const nonRegularSlots = schedules.filter(s => {
+      if (s.isOverrideHidden) return false;
+      if (s.isRegular) return false; // 기존에 남아있을 수 있는 regular 슬롯 무시
       if (s.date) {
-        return s.date >= weekStartStr && s.date <= weekEndStr;
+        return s.date >= wkStart && s.date <= wkEnd;
       }
       return true;
     });
-  }, [schedules, currentWeekStart, weekEnd, payments]);
+
+    return [...paymentDerivedSlots, ...nonRegularSlots];
+  }, [schedules, currentWeekStart, weekEnd, payments, activeStudents]);
 
   // Generate virtual slots for active special classes
   const specialClassSlots = useMemo(() => {
@@ -373,7 +384,21 @@ export default function ScheduleGrid() {
   // Delete with undo
   const handleDeleteSlot = (slot: ScheduleSlot, displayName: string) => {
     if (!confirm(`${displayName} 스케줄을 삭제하시겠습니까?`)) return;
-    removeSchedule(slot.id);
+    if (slot.isRegular) {
+      // 결제 기반 정규 슬롯: 이번 주에만 숨김 처리 (override hidden 마커 생성)
+      const dateStr = getDateForDay(slot.dayOfWeek);
+      addSchedule({
+        studentId: slot.studentId,
+        dayOfWeek: slot.dayOfWeek,
+        startTime: slot.startTime,
+        duration: slot.duration,
+        isRegular: false,
+        date: dateStr,
+        isOverrideHidden: true,
+      } as Omit<ScheduleSlot, 'id'>);
+    } else {
+      removeSchedule(slot.id);
+    }
     setDeletedSlot(slot);
     if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
     undoTimeoutRef.current = setTimeout(() => setDeletedSlot(null), 5000);
@@ -381,7 +406,20 @@ export default function ScheduleGrid() {
 
   const handleUndo = () => {
     if (deletedSlot) {
-      restoreSchedule(deletedSlot);
+      if (deletedSlot.isRegular) {
+        // 정규 슬롯 삭제 취소: override hidden 마커 제거
+        const dateStr = getDateForDay(deletedSlot.dayOfWeek);
+        const hiddenMarker = schedules.find(s =>
+          s.isOverrideHidden &&
+          s.studentId === deletedSlot.studentId &&
+          s.dayOfWeek === deletedSlot.dayOfWeek &&
+          s.startTime === deletedSlot.startTime &&
+          s.date === dateStr
+        );
+        if (hiddenMarker) removeSchedule(hiddenMarker.id);
+      } else {
+        restoreSchedule(deletedSlot);
+      }
       setDeletedSlot(null);
       if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
     }
@@ -473,7 +511,8 @@ export default function ScheduleGrid() {
     } else if (memoSlot.memo.trim()) {
       // Create a new attendance record with memo (status: 예정)
       const student = getStudentById(memoSlot.studentId);
-      const slot = schedules.find(s => s.id === memoSlot.slotId);
+      // Find slot from filtered (includes payment-derived) or store
+      const slot = filteredSchedules.find(s => s.id === memoSlot.slotId) || schedules.find(s => s.id === memoSlot.slotId);
       if (student && slot) {
         addAttendance({
           studentId: memoSlot.studentId,

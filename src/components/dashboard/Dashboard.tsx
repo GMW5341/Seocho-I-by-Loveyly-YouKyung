@@ -42,7 +42,7 @@ const DAILY_QUOTES = [
 ];
 
 export default function Dashboard() {
-  const { students, payments, attendance, schedules, holidays } = useAppStore();
+  const { students, payments, attendance, holidays } = useAppStore();
   const activeStudents = useMemo(() => students.filter(s => s.active), [students]);
 
   // Check if today is a holiday
@@ -60,21 +60,32 @@ export default function Dashboard() {
     return null;
   }, [holidays, todayStr]);
 
-  // Today's schedule (empty if holiday)
+  // Today's schedule - derived from active payments
   const todaySchedule = useMemo(() => {
     if (isTodayHoliday) return [];
     const today = new Date();
     const dayOfWeek = getDayOfWeekFromDate(format(today, 'yyyy-MM-dd'));
     if (!dayOfWeek) return [];
-    return schedules
-      .filter(s => s.dayOfWeek === dayOfWeek)
-      .map(s => ({
-        ...s,
-        student: activeStudents.find(st => st.id === s.studentId),
-      }))
-      .filter(s => s.student)
-      .sort((a, b) => a.startTime.localeCompare(b.startTime));
-  }, [schedules, activeStudents, isTodayHoliday]);
+    const slots: { id: string; studentId: string; startTime: string; duration: number; isRegular: boolean; student?: typeof activeStudents[0] }[] = [];
+    activeStudents.forEach(student => {
+      const activePayment = payments.find(p => p.studentId === student.id && !p.completed && p.remainingSessions > 0);
+      if (activePayment?.regularSchedule?.length) {
+        activePayment.regularSchedule
+          .filter(entry => entry.day === dayOfWeek)
+          .forEach((entry, i) => {
+            slots.push({
+              id: `today-${activePayment.id}-${i}`,
+              studentId: student.id,
+              startTime: entry.startTime,
+              duration: activePayment.classDuration,
+              isRegular: true,
+              student,
+            });
+          });
+      }
+    });
+    return slots.sort((a, b) => a.startTime.localeCompare(b.startTime));
+  }, [activeStudents, payments, isTodayHoliday]);
 
   // Monthly revenue chart data (last 6 months)
   const revenueChartData = useMemo(() => {
@@ -332,7 +343,10 @@ export default function Dashboard() {
                 <div>
                   <div className="text-sm font-medium text-gray-800">{item.student.name}</div>
                   <div className="text-xs text-gray-500">
-                    {item.student.level} | {(item.student.regularSchedule || []).map(entry => `${entry.day} ${entry.startTime}`).join(', ')}
+                    {item.student.level} | {(() => {
+                      const p = payments.find(pay => pay.studentId === item.student.id && !pay.completed && pay.remainingSessions > 0);
+                      return (p?.regularSchedule || []).map(entry => `${entry.day} ${entry.startTime}`).join(', ') || '-';
+                    })()}
                   </div>
                 </div>
                 <Badge variant="warning">보강 {item.pending}회</Badge>
