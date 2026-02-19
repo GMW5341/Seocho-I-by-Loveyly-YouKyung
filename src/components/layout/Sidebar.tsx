@@ -33,7 +33,7 @@ export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
           />
         )}
         <div>
-          <h1 className="text-lg font-bold text-indigo-700 leading-tight">seochoI-lovelyYK.ac</h1>
+          <h1 className="text-lg font-bold text-indigo-700 leading-tight">서초아이미술</h1>
           <p className="text-xs text-gray-500">통합 운영 시스템</p>
         </div>
       </div>
