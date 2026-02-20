@@ -60,25 +60,29 @@ export default function Dashboard() {
     return null;
   }, [holidays, todayStr]);
 
-  // Today's schedule - derived from active payments
+  // Today's schedule - derived from active payments (+ unpaid fallback)
   const todaySchedule = useMemo(() => {
     if (isTodayHoliday) return [];
     const today = new Date();
     const dayOfWeek = getDayOfWeekFromDate(format(today, 'yyyy-MM-dd'));
     if (!dayOfWeek) return [];
-    const slots: { id: string; studentId: string; startTime: string; duration: number; isRegular: boolean; student?: typeof activeStudents[0] }[] = [];
+    const slots: { id: string; studentId: string; startTime: string; duration: number; isRegular: boolean; isUnpaid?: boolean; student?: typeof activeStudents[0] }[] = [];
     activeStudents.forEach(student => {
       const activePayment = payments.find(p => p.studentId === student.id && !p.completed && p.remainingSessions > 0);
-      if (activePayment?.regularSchedule?.length) {
-        activePayment.regularSchedule
+      const payment = activePayment || payments
+        .filter(p => p.studentId === student.id && p.completed && p.regularSchedule?.length)
+        .sort((a, b) => b.paidAt.localeCompare(a.paidAt))[0];
+      if (payment?.regularSchedule?.length) {
+        payment.regularSchedule
           .filter(entry => entry.day === dayOfWeek)
           .forEach((entry, i) => {
             slots.push({
-              id: `today-${activePayment.id}-${i}`,
+              id: `today-${payment.id}-${i}`,
               studentId: student.id,
               startTime: entry.startTime,
-              duration: activePayment.classDuration,
+              duration: payment.classDuration,
               isRegular: true,
+              isUnpaid: !activePayment,
               student,
             });
           });
@@ -370,13 +374,14 @@ export default function Dashboard() {
                 <div className="text-xs text-red-400 mt-1">오늘은 공휴일/휴원일입니다</div>
               </div>
             ) : todaySchedule.length > 0 ? todaySchedule.map(slot => (
-              <div key={slot.id} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50">
+              <div key={slot.id} className={`flex items-center gap-3 p-2 rounded-lg ${slot.isUnpaid ? 'bg-red-50 border border-red-200' : 'bg-gray-50'}`}>
                 <div className="text-xs font-mono text-gray-500 w-12">{slot.startTime}</div>
                 <div className="flex-1">
                   <div className="text-sm font-medium text-gray-800">{slot.student?.name}</div>
                   <div className="text-xs text-gray-500">{slot.student?.level} | {slot.duration}분</div>
                 </div>
-                {!slot.isRegular && <Badge variant="warning">보강</Badge>}
+                {slot.isUnpaid && <Badge variant="danger">미결제</Badge>}
+                {!slot.isRegular && !slot.isUnpaid && <Badge variant="warning">보강</Badge>}
               </div>
             )) : (
               <div className="text-sm text-gray-400 text-center py-8">오늘은 수업이 없습니다</div>

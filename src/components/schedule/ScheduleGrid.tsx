@@ -41,6 +41,7 @@ interface DisplaySlot {
   isSpecialClass?: boolean;
   specialClassName?: string;
   specialClassStudentCount?: number;
+  isUnpaid?: boolean;
   column: number;
   numColumns: number;
 }
@@ -180,6 +181,22 @@ export default function ScheduleGrid() {
     return markers;
   }, [timeRange]);
 
+  // Track unpaid student IDs (payment exhausted but still showing schedule)
+  const unpaidStudentIds = useMemo(() => {
+    const ids = new Set<string>();
+    activeStudents.forEach(student => {
+      const hasActive = payments.some(p => p.studentId === student.id && !p.completed && p.remainingSessions > 0);
+      if (!hasActive) {
+        // 활성 결제 없음 → 가장 최근 완료된 결제에 스케줄이 있으면 미결제
+        const lastCompleted = payments
+          .filter(p => p.studentId === student.id && p.completed && p.regularSchedule?.length)
+          .sort((a, b) => b.paidAt.localeCompare(a.paidAt))[0];
+        if (lastCompleted) ids.add(student.id);
+      }
+    });
+    return ids;
+  }, [activeStudents, payments]);
+
   // Derive regular schedule slots from active payments (no longer stored in schedules)
   const filteredSchedules = useMemo(() => {
     const wkStart = format(currentWeekStart, 'yyyy-MM-dd');
@@ -190,12 +207,17 @@ export default function ScheduleGrid() {
       s.isOverrideHidden && s.date && s.date >= wkStart && s.date <= wkEnd
     );
 
-    // 1. 활성 결제에서 정규 스케줄 슬롯 파생
+    // 1. 활성 결제 또는 최근 완료 결제에서 정규 스케줄 슬롯 파생
     const paymentDerivedSlots: ScheduleSlot[] = [];
     activeStudents.forEach(student => {
       const activePayment = payments.find(p => p.studentId === student.id && !p.completed && p.remainingSessions > 0);
-      if (activePayment?.regularSchedule?.length) {
-        activePayment.regularSchedule.forEach((entry, i) => {
+      // 활성 결제 우선, 없으면 최근 완료 결제 fallback (미결제 상태 표시용)
+      const payment = activePayment || payments
+        .filter(p => p.studentId === student.id && p.completed && p.regularSchedule?.length)
+        .sort((a, b) => b.paidAt.localeCompare(a.paidAt))[0];
+
+      if (payment?.regularSchedule?.length) {
+        payment.regularSchedule.forEach((entry, i) => {
           const isHiddenThisWeek = hiddenOverrides.some(h =>
             h.studentId === student.id &&
             h.dayOfWeek === entry.day &&
@@ -203,11 +225,11 @@ export default function ScheduleGrid() {
           );
           if (!isHiddenThisWeek) {
             paymentDerivedSlots.push({
-              id: `pay-${activePayment.id}-${i}`,
+              id: `pay-${payment.id}-${i}`,
               studentId: student.id,
               dayOfWeek: entry.day,
               startTime: entry.startTime,
-              duration: activePayment.classDuration,
+              duration: payment.classDuration,
               isRegular: true,
             });
           }
@@ -266,11 +288,16 @@ export default function ScheduleGrid() {
       const layout = layoutSlotsForDay(allSlots);
       result[day] = allSlots.map(slot => {
         const pos = layout.get(slot.id) || { column: 0, numColumns: 1 };
-        return { ...slot, column: pos.column, numColumns: pos.numColumns } as DisplaySlot;
+        return {
+          ...slot,
+          column: pos.column,
+          numColumns: pos.numColumns,
+          isUnpaid: unpaidStudentIds.has(slot.studentId),
+        } as DisplaySlot;
       });
     });
     return result;
-  }, [filteredSchedules, specialClassSlots]);
+  }, [filteredSchedules, specialClassSlots, unpaidStudentIds]);
 
   // Drop validation
   const isDropValid = useCallback((day: DayOfWeek, time: string, slot: ScheduleSlot): boolean => {
@@ -588,6 +615,7 @@ export default function ScheduleGrid() {
         <div className="flex items-center gap-1 ml-4"><div className="w-3 h-3 rounded border-2 border-dashed border-orange-400" /> 보강</div>
         <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-emerald-200 border-2 border-emerald-400" /> 체험</div>
         <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-rose-200 border-2 border-rose-400" /> 특강</div>
+        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-red-100 border-2 border-red-400 border-dashed" /> 미결제</div>
         <div className="flex items-center gap-1 ml-4"><div className="w-3 h-3 rounded ring-2 ring-green-500 bg-white" /> 출석</div>
         <div className="flex items-center gap-1"><div className="w-3 h-3 rounded ring-2 ring-red-500 bg-red-50" /> 결석</div>
       </div>
@@ -807,13 +835,15 @@ export default function ScheduleGrid() {
                           border select-none group/card overflow-hidden
                           transition-all
                           ${isDayView ? 'px-3 py-2' : 'px-1.5 py-1'}
-                          ${isTrial
+                          ${slot.isUnpaid
+                            ? 'bg-red-50 border-red-400 border-2 border-dashed'
+                            : isTrial
                             ? 'bg-emerald-100 border-emerald-400 border-2'
                             : isAbsent
                             ? 'bg-red-100 border-red-300'
                             : getDurationColor(slot.duration)
                           }
-                          ${!slot.isRegular && !isTrial ? 'border-dashed border-orange-400 border-2' : ''}
+                          ${!slot.isRegular && !isTrial && !slot.isUnpaid ? 'border-dashed border-orange-400 border-2' : ''}
                           ${draggedSlot?.id === slot.id ? 'opacity-40' : !isSearchMatch ? 'opacity-20' : 'opacity-95 hover:opacity-100'}
                           ${isSearchMatch && searchQuery ? 'ring-2 ring-indigo-500 z-20' : ''}
                           ${attendanceClass}
@@ -833,6 +863,7 @@ export default function ScheduleGrid() {
                         <div className={`text-gray-500 ${isDayView ? 'text-xs' : 'text-[10px]'}`}>{slot.duration}분{isDayView && student ? ` | ${student.level}` : ''}</div>
                         {isTrial && <div className={`text-emerald-700 font-medium ${isDayView ? 'text-xs' : 'text-[10px]'}`}>체험</div>}
                         {!slot.isRegular && !isTrial && <div className={`text-orange-600 font-medium ${isDayView ? 'text-xs' : 'text-[10px]'}`}>보강</div>}
+                        {slot.isUnpaid && <div className={`text-red-600 font-bold ${isDayView ? 'text-xs' : 'text-[10px]'}`}>미결제</div>}
                         {isRestorable && (
                           <button
                             onClick={(e) => { e.stopPropagation(); handleRestoreSlot(slot); }}

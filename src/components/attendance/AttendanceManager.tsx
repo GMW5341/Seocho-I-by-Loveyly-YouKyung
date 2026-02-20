@@ -48,11 +48,14 @@ export default function AttendanceManager() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showCalendar]);
 
-  // Get scheduled times for a student on a day - from active payment
+  // Get scheduled times for a student on a day - from active payment (or last completed fallback)
   const getScheduledTimes = (studentId: string, dayOfWeek: DayOfWeek | null) => {
     if (!dayOfWeek) return [];
     const activePayment = payments.find(p => p.studentId === studentId && !p.completed && p.remainingSessions > 0);
-    return (activePayment?.regularSchedule || []).filter(entry => entry.day === dayOfWeek);
+    const payment = activePayment || payments
+      .filter(p => p.studentId === studentId && p.completed && p.regularSchedule?.length)
+      .sort((a, b) => b.paidAt.localeCompare(a.paidAt))[0];
+    return (payment?.regularSchedule || []).filter(entry => entry.day === dayOfWeek);
   };
 
   // Get attendance record for a student on a specific date + startTime
