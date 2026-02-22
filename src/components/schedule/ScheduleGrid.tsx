@@ -559,8 +559,8 @@ export default function ScheduleGrid() {
     <div className="p-3 md:p-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
         <div>
-          <h3 className="text-lg font-bold text-gray-800">주간 스케줄</h3>
-          <p className="text-sm text-gray-500">
+          <h3 className="text-lg font-bold text-gray-800 schedule-premium-title">주간 스케줄</h3>
+          <p className="text-sm text-gray-500 schedule-premium-subtitle">
             {settings.currentSeason} | 동시간대 최대 {settings.maxStudentsPerSlot}명
           </p>
         </div>
@@ -601,7 +601,7 @@ export default function ScheduleGrid() {
       {/* Week Navigation - date range only */}
       <div className="flex items-center gap-3 mb-4">
         <button onClick={goToPrevWeek} className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-lg text-sm hover:bg-gray-50 text-gray-600">&lsaquo;</button>
-        <span className="text-sm font-semibold text-gray-800 px-2">
+        <span className="text-sm font-semibold text-gray-800 px-2 schedule-premium-title">
           {format(currentWeekStart, 'yyyy년 M월 d일', { locale: ko })} ~ {format(weekEnd, 'M월 d일', { locale: ko })}
         </span>
         <button onClick={goToNextWeek} className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-lg text-sm hover:bg-gray-50 text-gray-600">&rsaquo;</button>
@@ -656,7 +656,7 @@ export default function ScheduleGrid() {
         <div className={selectedDay ? '' : 'min-w-[800px]'}>
           {/* Header */}
           <div className="flex bg-gray-50 border-b border-gray-200">
-            <div className="w-16 shrink-0 px-2 py-2 text-xs font-medium text-gray-500 text-center border-r border-gray-200">
+            <div className="w-16 shrink-0 px-2 py-2 text-xs font-medium text-gray-500 text-center border-r border-gray-200 schedule-premium-header">
               시간
             </div>
             {(selectedDay ? [selectedDay] : DAYS_OF_WEEK).map(day => {
@@ -668,7 +668,7 @@ export default function ScheduleGrid() {
                 <div
                   key={day}
                   onClick={() => !selectedDay && hours && setSelectedDay(day)}
-                  className={`flex-1 px-3 py-2 text-sm font-medium text-center border-r border-gray-200 last:border-r-0 ${
+                  className={`flex-1 px-3 py-2 text-sm font-medium text-center border-r border-gray-200 last:border-r-0 schedule-premium-header ${
                     holidayName ? 'bg-red-50 text-red-600' : 'text-gray-700'
                   } ${!selectedDay && hours ? 'cursor-pointer hover:bg-indigo-50 transition-colors' : ''}`}
                 >
@@ -755,8 +755,10 @@ export default function ScheduleGrid() {
                   {/* Drop hover indicator */}
                   {hoveredCell?.day === day && draggedSlot && (
                     <div
-                      className={`absolute left-1 right-1 rounded border-2 z-20 pointer-events-none ${
-                        isDropValid(day, hoveredCell.time, draggedSlot) ? 'border-green-400 bg-green-50/60' : 'border-red-400 bg-red-50/60'
+                      className={`drop-indicator absolute left-1 right-1 rounded-lg border-2 z-20 pointer-events-none ${
+                        isDropValid(day, hoveredCell.time, draggedSlot)
+                          ? 'border-green-400 bg-green-50/60 shadow-md shadow-green-200/40'
+                          : 'border-red-400 bg-red-50/60 shadow-md shadow-red-200/40'
                       }`}
                       style={{ top: (timeToMinutes(hoveredCell.time) - timeRange.earliest) * PX_PER_MINUTE, height: draggedSlot.duration * PX_PER_MINUTE }}
                     />
@@ -800,9 +802,10 @@ export default function ScheduleGrid() {
                         <div
                           key={slot.id}
                           className={`
-                            absolute z-10 rounded border-2 select-none overflow-hidden
+                            schedule-block
+                            absolute z-10 rounded-lg border-2 select-none overflow-hidden
                             bg-rose-100 border-rose-400
-                            ${!isSearchMatch ? 'opacity-20' : 'opacity-95'}
+                            ${!isSearchMatch ? 'opacity-20' : ''}
                             ${isDayView ? 'px-3 py-2' : 'px-1.5 py-1'}
                           `}
                           style={{
@@ -831,9 +834,9 @@ export default function ScheduleGrid() {
                         onDragStart={(e) => handleDragStart(slot as ScheduleSlot, e)}
                         onDragEnd={handleDragEnd}
                         className={`
-                          absolute z-10 rounded cursor-grab active:cursor-grabbing
+                          schedule-block
+                          absolute z-10 rounded-lg cursor-grab active:cursor-grabbing
                           border select-none group/card overflow-hidden
-                          transition-all
                           ${isDayView ? 'px-3 py-2' : 'px-1.5 py-1'}
                           ${slot.isUnpaid
                             ? 'bg-red-50 border-red-400 border-2 border-dashed'
@@ -844,7 +847,7 @@ export default function ScheduleGrid() {
                             : getDurationColor(slot.duration)
                           }
                           ${!slot.isRegular && !isTrial && !slot.isUnpaid ? 'border-dashed border-orange-400 border-2' : ''}
-                          ${draggedSlot?.id === slot.id ? 'opacity-40' : !isSearchMatch ? 'opacity-20' : 'opacity-95 hover:opacity-100'}
+                          ${draggedSlot?.id === slot.id ? 'drag-ghost' : !isSearchMatch ? 'opacity-20' : ''}
                           ${isSearchMatch && searchQuery ? 'ring-2 ring-indigo-500 z-20' : ''}
                           ${attendanceClass}
                         `}
