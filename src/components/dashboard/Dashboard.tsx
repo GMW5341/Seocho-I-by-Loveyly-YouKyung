@@ -191,18 +191,14 @@ export default function Dashboard() {
       .sort((a, b) => a.remaining - b.remaining);
   }, [activeStudents, payments]);
 
-  // Daily quote - based on day of year, skip holidays/weekends
+  // Daily quote - based on day of year
   const dailyQuote = useMemo(() => {
-    if (isTodayHoliday) return null;
     const today = new Date();
-    const dayOfWeek = today.getDay();
-    // 일(0), 월(1) = 휴원
-    if (dayOfWeek === 0 || dayOfWeek === 1) return null;
     const startOfYear = new Date(today.getFullYear(), 0, 0);
     const diff = today.getTime() - startOfYear.getTime();
     const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
     return DAILY_QUOTES[dayOfYear % DAILY_QUOTES.length];
-  }, [isTodayHoliday]);
+  }, []);
 
   return (
     <div className="p-3 md:p-6">
