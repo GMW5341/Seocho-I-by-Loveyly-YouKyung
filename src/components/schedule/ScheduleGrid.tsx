@@ -10,6 +10,8 @@ import {
   getEndTime,
   isTimeOverlapping,
   getDurationColor,
+  getDurationAccent,
+  getDurationTextColor,
   timeToMinutes,
   minutesToTime,
   layoutSlotsForDay,
@@ -559,8 +561,8 @@ export default function ScheduleGrid() {
     <div className="p-3 md:p-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
         <div>
-          <h3 className="text-lg font-bold text-gray-800 schedule-premium-title">주간 스케줄</h3>
-          <p className="text-sm text-gray-500 schedule-premium-subtitle">
+          <h3 className="text-lg font-bold text-gray-800">주간 스케줄</h3>
+          <p className="text-sm text-gray-500">
             {settings.currentSeason} | 동시간대 최대 {settings.maxStudentsPerSlot}명
           </p>
         </div>
@@ -601,7 +603,7 @@ export default function ScheduleGrid() {
       {/* Week Navigation - date range only */}
       <div className="flex items-center gap-3 mb-4">
         <button onClick={goToPrevWeek} className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-lg text-sm hover:bg-gray-50 text-gray-600">&lsaquo;</button>
-        <span className="text-sm font-semibold text-gray-800 px-2 schedule-premium-title">
+        <span className="text-sm font-semibold text-gray-800 px-2">
           {format(currentWeekStart, 'yyyy년 M월 d일', { locale: ko })} ~ {format(weekEnd, 'M월 d일', { locale: ko })}
         </span>
         <button onClick={goToNextWeek} className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-lg text-sm hover:bg-gray-50 text-gray-600">&rsaquo;</button>
@@ -609,15 +611,15 @@ export default function ScheduleGrid() {
 
       {/* Legend */}
       <div className="flex gap-4 mb-4 text-xs flex-wrap">
-        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-[#00FFFF] border border-[#00FFFF]" /> 60분</div>
-        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-[#FFD4F9] border border-[#FFD4F9]" /> 80분</div>
-        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-[#FFF200] border border-[#FFF200]" /> 100분</div>
-        <div className="flex items-center gap-1 ml-4"><div className="w-3 h-3 rounded border-2 border-dashed border-orange-400" /> 보강</div>
-        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-emerald-200 border-2 border-emerald-400" /> 체험</div>
-        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-rose-200 border-2 border-rose-400" /> 특강</div>
-        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-red-100 border-2 border-red-400 border-dashed" /> 미결제</div>
-        <div className="flex items-center gap-1 ml-4"><div className="w-3 h-3 rounded ring-2 ring-green-500 bg-white" /> 출석</div>
-        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded ring-2 ring-red-500 bg-red-50" /> 결석</div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-cyan-400" /> 60분</div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-pink-400" /> 80분</div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-amber-400" /> 100분</div>
+        <div className="flex items-center gap-1.5 ml-4"><div className="w-3 h-3 rounded-sm border-2 border-dashed border-orange-400" /> 보강</div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-emerald-400" /> 체험</div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-rose-400" /> 특강</div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-red-100 border-2 border-red-400 border-dashed" /> 미결제</div>
+        <div className="flex items-center gap-1.5 ml-4"><div className="w-3 h-3 rounded-sm ring-2 ring-green-500 bg-white" /> 출석</div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm ring-2 ring-red-500 bg-red-50" /> 결석</div>
       </div>
 
       {/* Day tabs for detail view */}
@@ -656,7 +658,7 @@ export default function ScheduleGrid() {
         <div className={selectedDay ? '' : 'min-w-[800px]'}>
           {/* Header */}
           <div className="flex bg-gray-50 border-b border-gray-200">
-            <div className="w-16 shrink-0 px-2 py-2 text-xs font-medium text-gray-500 text-center border-r border-gray-200 schedule-premium-header">
+            <div className="w-16 shrink-0 px-2 py-2 text-xs font-medium text-gray-500 text-center border-r border-gray-200">
               시간
             </div>
             {(selectedDay ? [selectedDay] : DAYS_OF_WEEK).map(day => {
@@ -668,7 +670,7 @@ export default function ScheduleGrid() {
                 <div
                   key={day}
                   onClick={() => !selectedDay && hours && setSelectedDay(day)}
-                  className={`flex-1 px-3 py-2 text-sm font-medium text-center border-r border-gray-200 last:border-r-0 schedule-premium-header ${
+                  className={`flex-1 px-3 py-2 text-sm font-medium text-center border-r border-gray-200 last:border-r-0 ${
                     holidayName ? 'bg-red-50 text-red-600' : 'text-gray-700'
                   } ${!selectedDay && hours ? 'cursor-pointer hover:bg-indigo-50 transition-colors' : ''}`}
                 >
@@ -803,10 +805,9 @@ export default function ScheduleGrid() {
                           key={slot.id}
                           className={`
                             schedule-block
-                            absolute z-10 rounded-lg border-2 select-none overflow-hidden
-                            bg-rose-100 border-rose-400
+                            absolute z-10 rounded-lg border select-none overflow-hidden
+                            bg-rose-50 border-rose-300
                             ${!isSearchMatch ? 'opacity-20' : ''}
-                            ${isDayView ? 'px-3 py-2' : 'px-1.5 py-1'}
                           `}
                           style={{
                             top: top + 1,
@@ -815,17 +816,35 @@ export default function ScheduleGrid() {
                             width: `calc(${widthPercent}% - 4px)`,
                           }}
                         >
-                          <div className={`font-semibold truncate text-rose-800 ${isDayView ? 'text-sm' : 'text-xs'}`}>
-                            {displayName}
-                          </div>
-                          <div className={`text-rose-600 tabular-nums ${isDayView ? 'text-xs' : 'text-[10px]'}`}>{slot.startTime}-{endTime}</div>
-                          <div className={`text-rose-600 ${isDayView ? 'text-xs' : 'text-[10px]'}`}>{slot.duration}분</div>
-                          <div className={`text-rose-700 font-medium ${isDayView ? 'text-xs' : 'text-[10px]'}`}>
-                            특강 ({slot.specialClassStudentCount || 0}명)
+                          <div className={`absolute left-0 top-0 bottom-0 ${isDayView ? 'w-1' : 'w-0.5'} bg-rose-500`} />
+                          <div className={isDayView ? 'pl-3.5 pr-2 py-2' : 'pl-2 pr-1 py-1'}>
+                            <div className={`font-bold truncate text-rose-800 leading-tight ${isDayView ? 'text-sm' : 'text-[11px]'}`}>
+                              {displayName}
+                            </div>
+                            <div className={`text-rose-600 tabular-nums leading-tight ${isDayView ? 'text-xs mt-0.5' : 'text-[10px]'}`}>{slot.startTime}~{endTime}</div>
+                            <div className={`flex items-center gap-1 leading-tight ${isDayView ? 'text-xs mt-0.5' : 'text-[10px]'}`}>
+                              <span className="text-rose-500">{slot.duration}분</span>
+                            </div>
+                            <div className={isDayView ? 'mt-1' : 'mt-0.5'}>
+                              <span className={`inline-block bg-rose-500 text-white font-bold rounded-full leading-none ${isDayView ? 'px-2 py-0.5 text-[10px]' : 'px-1 py-px text-[8px]'}`}>
+                                특강 {slot.specialClassStudentCount || 0}명
+                              </span>
+                            </div>
                           </div>
                         </div>
                       );
                     }
+
+                    // Accent bar color
+                    const accentColor = slot.isUnpaid
+                      ? 'bg-red-500'
+                      : isTrial
+                      ? 'bg-emerald-500'
+                      : !slot.isRegular && !isTrial
+                      ? 'bg-orange-400'
+                      : getDurationAccent(slot.duration);
+
+                    const durationText = getDurationTextColor(slot.duration);
 
                     return (
                       <div
@@ -837,16 +856,15 @@ export default function ScheduleGrid() {
                           schedule-block
                           absolute z-10 rounded-lg cursor-grab active:cursor-grabbing
                           border select-none group/card overflow-hidden
-                          ${isDayView ? 'px-3 py-2' : 'px-1.5 py-1'}
                           ${slot.isUnpaid
-                            ? 'bg-red-50 border-red-400 border-2 border-dashed'
+                            ? 'bg-red-50 border-red-300 border-dashed'
                             : isTrial
-                            ? 'bg-emerald-100 border-emerald-400 border-2'
+                            ? 'bg-emerald-50 border-emerald-300'
                             : isAbsent
-                            ? 'bg-red-100 border-red-300'
+                            ? 'bg-red-50 border-red-300'
                             : getDurationColor(slot.duration)
                           }
-                          ${!slot.isRegular && !isTrial && !slot.isUnpaid ? 'border-dashed border-orange-400 border-2' : ''}
+                          ${!slot.isRegular && !isTrial && !slot.isUnpaid ? 'border-dashed border-orange-300' : ''}
                           ${draggedSlot?.id === slot.id ? 'drag-ghost' : !isSearchMatch ? 'opacity-20' : ''}
                           ${isSearchMatch && searchQuery ? 'ring-2 ring-indigo-500 z-20' : ''}
                           ${attendanceClass}
@@ -858,44 +876,85 @@ export default function ScheduleGrid() {
                           width: `calc(${widthPercent}% - 4px)`,
                         }}
                       >
-                        <div className={`font-semibold truncate ${isDayView ? 'text-sm' : 'text-xs'} ${isAbsent ? 'text-red-700 line-through' : 'text-gray-800'}`}>
-                          {displayName}
-                          {isDayView && student && <span className="font-normal text-gray-500 ml-1">({student.grade})</span>}
-                        </div>
-                        <div className={`text-gray-500 tabular-nums ${isDayView ? 'text-xs' : 'text-[10px]'}`}>{slot.startTime}-{endTime}</div>
-                        <div className={`text-gray-500 ${isDayView ? 'text-xs' : 'text-[10px]'}`}>{slot.duration}분{isDayView && student ? ` | ${student.level}` : ''}</div>
-                        {isTrial && <div className={`text-emerald-700 font-medium ${isDayView ? 'text-xs' : 'text-[10px]'}`}>체험</div>}
-                        {!slot.isRegular && !isTrial && <div className={`text-orange-600 font-medium ${isDayView ? 'text-xs' : 'text-[10px]'}`}>보강</div>}
-                        {slot.isUnpaid && <div className={`text-red-600 font-bold ${isDayView ? 'text-xs' : 'text-[10px]'}`}>미결제</div>}
-                        {isRestorable && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleRestoreSlot(slot); }}
-                            className={`mt-0.5 text-blue-600 hover:text-blue-800 font-medium ${isDayView ? 'text-xs' : 'text-[9px]'}`}
-                          >
-                            ↩ 돌아가기
-                          </button>
-                        )}
-                        {attendanceRecord && (
-                          <div className={`font-bold mt-0.5 ${isDayView ? 'text-xs' : 'text-[9px]'} ${
-                            attendanceRecord.status === '출석' ? 'text-green-700' : attendanceRecord.status === '결석' ? 'text-red-600' : 'text-blue-700'
-                          }`}>
-                            {attendanceRecord.status}
-                          </div>
-                        )}
+                        {/* Left accent bar */}
+                        <div className={`absolute left-0 top-0 bottom-0 ${isDayView ? 'w-1' : 'w-0.5'} ${accentColor}`} />
 
-                        {/* Memo callout */}
-                        {attendanceRecord?.memo && (
-                          <div className={`mt-0.5 bg-yellow-50 border-l-2 border-yellow-400 rounded-r ${isDayView ? 'px-2 py-1' : 'px-1 py-0.5'}`} title={attendanceRecord.memo}>
-                            <div className={`text-yellow-600 font-bold leading-none mb-px ${isDayView ? 'text-[10px]' : 'text-[8px]'}`}>메모</div>
-                            <div className={`text-gray-600 leading-tight ${isDayView ? 'text-xs whitespace-pre-wrap' : 'text-[9px] truncate'}`}>
-                              {attendanceRecord.memo}
-                            </div>
+                        {/* Content area */}
+                        <div className={isDayView ? 'pl-2.5' : 'pl-1.5'}>
+                          {/* Name row */}
+                          <div className={`font-bold truncate leading-tight ${isDayView ? 'text-sm' : 'text-[11px]'} ${isAbsent ? 'text-red-600 line-through' : 'text-gray-900'}`}>
+                            {displayName}
+                            {isDayView && student && <span className="font-normal text-gray-400 ml-1 text-xs">({student.grade})</span>}
                           </div>
-                        )}
+
+                          {/* Time row */}
+                          <div className={`tabular-nums leading-tight ${isDayView ? 'text-xs mt-0.5' : 'text-[10px]'} ${isTrial ? 'text-emerald-600' : slot.isUnpaid ? 'text-red-500' : durationText}`}>
+                            {slot.startTime}~{endTime}
+                          </div>
+
+                          {/* Info row */}
+                          <div className={`flex items-center gap-1 leading-tight ${isDayView ? 'text-xs mt-0.5' : 'text-[10px]'}`}>
+                            <span className="text-gray-500">{slot.duration}분</span>
+                            {isDayView && student && <span className="text-gray-400">|</span>}
+                            {isDayView && student && <span className="text-gray-500">{student.level}</span>}
+                          </div>
+
+                          {/* Status badges */}
+                          {(isTrial || (!slot.isRegular && !isTrial) || slot.isUnpaid) && (
+                            <div className={`flex items-center gap-1 ${isDayView ? 'mt-1' : 'mt-0.5'}`}>
+                              {isTrial && (
+                                <span className={`inline-block bg-emerald-500 text-white font-bold rounded-full leading-none ${isDayView ? 'px-2 py-0.5 text-[10px]' : 'px-1 py-px text-[8px]'}`}>
+                                  체험
+                                </span>
+                              )}
+                              {!slot.isRegular && !isTrial && !slot.isUnpaid && (
+                                <span className={`inline-block bg-orange-400 text-white font-bold rounded-full leading-none ${isDayView ? 'px-2 py-0.5 text-[10px]' : 'px-1 py-px text-[8px]'}`}>
+                                  보강
+                                </span>
+                              )}
+                              {slot.isUnpaid && (
+                                <span className={`inline-block bg-red-500 text-white font-bold rounded-full leading-none ${isDayView ? 'px-2 py-0.5 text-[10px]' : 'px-1 py-px text-[8px]'}`}>
+                                  미결제
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {isRestorable && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleRestoreSlot(slot); }}
+                              className={`mt-0.5 text-blue-600 hover:text-blue-800 font-medium ${isDayView ? 'text-xs' : 'text-[9px]'}`}
+                            >
+                              ↩ 돌아가기
+                            </button>
+                          )}
+
+                          {/* Attendance status badge */}
+                          {attendanceRecord && (
+                            <div className={`${isDayView ? 'mt-1' : 'mt-0.5'}`}>
+                              <span className={`inline-block font-bold rounded-full leading-none ${isDayView ? 'px-2 py-0.5 text-[10px]' : 'px-1 py-px text-[8px]'} ${
+                                attendanceRecord.status === '출석' ? 'bg-green-100 text-green-700'
+                                : attendanceRecord.status === '결석' ? 'bg-red-100 text-red-600'
+                                : 'bg-blue-100 text-blue-700'
+                              }`}>
+                                {attendanceRecord.status}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Memo callout */}
+                          {attendanceRecord?.memo && (
+                            <div className={`mt-0.5 bg-yellow-50/80 border-l-2 border-yellow-400 rounded-r ${isDayView ? 'px-2 py-1' : 'px-1 py-0.5'}`} title={attendanceRecord.memo}>
+                              <div className={`text-gray-600 leading-tight ${isDayView ? 'text-xs whitespace-pre-wrap' : 'text-[9px] truncate'}`}>
+                                {attendanceRecord.memo}
+                              </div>
+                            </div>
+                          )}
+                        </div>
 
                         {/* Attendance buttons on hover */}
                         {!isTrial && student && (
-                          <div className={`absolute bottom-0 left-0 right-0 bg-white/90 border-t border-gray-200 hidden group-hover/card:flex items-center justify-center py-0.5 ${isDayView ? 'gap-1.5' : 'gap-0.5'}`}>
+                          <div className={`absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-200/60 hidden group-hover/card:flex items-center justify-center py-0.5 ${isDayView ? 'gap-1.5' : 'gap-0.5'}`}>
                             {(['출석', '결석', '보강'] as AttendanceStatus[]).map(status => (
                               <button
                                 key={status}
@@ -907,8 +966,8 @@ export default function ScheduleGrid() {
                                   isDayView ? 'w-7 h-7 text-[10px]' : 'w-5 h-5 text-[8px]'
                                 } ${
                                   attendanceRecord?.status === status
-                                    ? status === '출석' ? 'bg-green-500 text-white' : status === '결석' ? 'bg-red-500 text-white' : 'bg-blue-500 text-white'
-                                    : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                                    ? status === '출석' ? 'bg-green-500 text-white shadow-sm' : status === '결석' ? 'bg-red-500 text-white shadow-sm' : 'bg-blue-500 text-white shadow-sm'
+                                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                                 }`}
                                 title={status}
                               >
@@ -942,7 +1001,7 @@ export default function ScheduleGrid() {
                             e.stopPropagation();
                             handleDeleteSlot(slot as ScheduleSlot, displayName);
                           }}
-                          className={`absolute top-0 right-0 bg-red-500 text-white rounded-full leading-none items-center justify-center hidden group-hover/card:flex ${
+                          className={`absolute top-0 right-0 bg-red-500 text-white rounded-full leading-none items-center justify-center hidden group-hover/card:flex shadow-sm ${
                             isDayView ? 'w-5 h-5 text-xs' : 'w-4 h-4 text-[10px]'
                           }`}
                         >

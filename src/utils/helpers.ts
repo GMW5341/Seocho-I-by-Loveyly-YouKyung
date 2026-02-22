@@ -221,10 +221,28 @@ export function getClassLevelColor(level: string): string {
 
 export function getDurationColor(duration: number): string {
   switch (duration) {
-    case 60: return 'bg-[#00FFFF]/25 border-[#00FFFF]';
-    case 80: return 'bg-[#FFD4F9]/25 border-[#FFD4F9]';
-    case 100: return 'bg-[#FFF200]/25 border-[#FFF200]';
+    case 60: return 'bg-cyan-50 border-cyan-400';
+    case 80: return 'bg-pink-50 border-pink-400';
+    case 100: return 'bg-amber-50 border-amber-400';
     default: return 'bg-gray-50 border-gray-300';
+  }
+}
+
+export function getDurationAccent(duration: number): string {
+  switch (duration) {
+    case 60: return 'bg-cyan-400';
+    case 80: return 'bg-pink-400';
+    case 100: return 'bg-amber-400';
+    default: return 'bg-gray-400';
+  }
+}
+
+export function getDurationTextColor(duration: number): string {
+  switch (duration) {
+    case 60: return 'text-cyan-700';
+    case 80: return 'text-pink-700';
+    case 100: return 'text-amber-700';
+    default: return 'text-gray-700';
   }
 }
 

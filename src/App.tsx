@@ -156,7 +156,7 @@ function AmusementParkLoader({ status }: { status: string }) {
         <div className="text-center">
           <div className="flex items-center justify-center gap-3 mb-2">
             <span className="bounce-1 text-3xl">🎨</span>
-            <h1 className="text-2xl md:text-3xl font-bold text-white drop-shadow-md" style={{ fontFamily: '"Noto Serif KR", Georgia, serif', textShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
+            <h1 className="text-2xl md:text-3xl font-bold text-white drop-shadow-md" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
               서초아이미술
             </h1>
             <span className="bounce-2 text-3xl">🖌️</span>

@@ -8,27 +8,6 @@
 }
 
 /* =============================================
-   Schedule Premium Font
-   ============================================= */
-.schedule-premium-title {
-  font-family: "Noto Serif KR", "Cormorant Garamond", Georgia, serif;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.schedule-premium-subtitle {
-  font-family: "Noto Serif KR", "Cormorant Garamond", Georgia, serif;
-  font-weight: 400;
-  letter-spacing: 0.01em;
-}
-
-.schedule-premium-header {
-  font-family: "Noto Serif KR", "Cormorant Garamond", Georgia, serif;
-  font-weight: 500;
-  letter-spacing: 0.015em;
-}
-
-/* =============================================
    Smooth Drag & Drop Animations
    ============================================= */
 .schedule-block {
