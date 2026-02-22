@@ -560,6 +560,7 @@ export default function PaymentManager() {
         <PaymentForm
           students={activeStudents}
           settings={settings}
+          payments={payments}
           onSubmit={handleAddPayment}
           onCancel={() => setShowForm(false)}
         />
@@ -571,6 +572,7 @@ export default function PaymentManager() {
           <PaymentForm
             students={students}
             settings={settings}
+            payments={payments}
             payment={editingPayment}
             onSubmit={handleEditPayment}
             onCancel={() => setEditingPayment(undefined)}
@@ -583,6 +585,7 @@ export default function PaymentManager() {
         <PaymentForm
           students={activeStudents}
           settings={settings}
+          payments={payments}
           isPastMode
           onSubmit={handleAddPayment}
           onCancel={() => setShowPastForm(false)}

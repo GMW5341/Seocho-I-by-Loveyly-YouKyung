@@ -6,6 +6,7 @@ import { formatCurrency, getPricePerSession } from '../../utils/helpers';
 interface PaymentFormProps {
   students: Student[];
   settings: AcademySettings;
+  payments?: Payment[];
   payment?: Payment;
   isPastMode?: boolean;
   onSubmit: (data: Omit<Payment, 'id' | 'usedSessions' | 'remainingSessions' | 'completed'> & { isPastRecord?: boolean }) => void;
@@ -14,13 +15,8 @@ interface PaymentFormProps {
 
 const PAYMENT_METHODS: PaymentMethod[] = ['계좌이체', '현금', '카드', '온누리상품권', '기타'];
 const DAYS: DayOfWeek[] = ['월', '화', '수', '목', '금', '토'];
-const TIME_SLOTS = Array.from({ length: 27 }, (_, i) => {
-  const h = Math.floor(i / 2) + 10;
-  const m = i % 2 === 0 ? '00' : '30';
-  return `${String(h).padStart(2, '0')}:${m}`;
-});
 
-export default function PaymentForm({ students, settings, payment, isPastMode, onSubmit, onCancel }: PaymentFormProps) {
+export default function PaymentForm({ students, settings, payments: allPayments, payment, isPastMode, onSubmit, onCancel }: PaymentFormProps) {
   const [studentId, setStudentId] = useState(payment?.studentId || '');
   const [studentSearch, setStudentSearch] = useState('');
   const [totalSessions, setTotalSessions] = useState(payment?.totalSessions || 4);
@@ -73,17 +69,23 @@ export default function PaymentForm({ students, settings, payment, isPastMode, o
     }
   }, [originalAmount, discountRate, extraDiscountTotal, manualAmount]);
 
-  // Auto-set duration and schedule from student selection
+  // Auto-set duration and schedule from latest payment (not from student's old data)
   useEffect(() => {
     if (selectedStudent && !payment) {
-      setClassDuration(selectedStudent.classDuration);
-      // Load existing schedule from student as default
-      if (selectedStudent.regularSchedule?.length) {
-        setSessionsPerWeek(selectedStudent.sessionsPerWeek || selectedStudent.regularSchedule.length);
-        setRegularSchedule([...selectedStudent.regularSchedule]);
+      // Find the latest payment for this student to get the most recent schedule
+      const latestPayment = allPayments
+        ?.filter(p => p.studentId === selectedStudent.id && p.regularSchedule?.length)
+        .sort((a, b) => b.paidAt.localeCompare(a.paidAt))[0];
+
+      if (latestPayment) {
+        setClassDuration(latestPayment.classDuration);
+        setSessionsPerWeek(latestPayment.sessionsPerWeek || latestPayment.regularSchedule!.length);
+        setRegularSchedule([...latestPayment.regularSchedule!]);
+      } else {
+        setClassDuration(selectedStudent.classDuration);
       }
     }
-  }, [selectedStudent, payment]);
+  }, [selectedStudent, payment, allPayments]);
 
   const handleSessionsPerWeekChange = (n: number) => {
     setSessionsPerWeek(n);
@@ -198,8 +200,8 @@ export default function PaymentForm({ students, settings, payment, isPastMode, o
         <div className="bg-blue-50 rounded-lg p-4 space-y-3">
           <div className="flex items-center justify-between">
             <label className="block text-sm font-bold text-gray-800">수업 스케줄</label>
-            {selectedStudent?.regularSchedule?.length ? (
-              <span className="text-xs text-blue-600">기존 스케줄이 자동 로드되었습니다</span>
+            {regularSchedule.length > 0 && !payment ? (
+              <span className="text-xs text-blue-600">이전 결제의 스케줄이 자동 로드되었습니다</span>
             ) : null}
           </div>
           <div>
@@ -247,7 +249,8 @@ export default function PaymentForm({ students, settings, payment, isPastMode, o
                       </button>
                     ))}
                   </div>
-                  <select
+                  <input
+                    type="time"
                     value={entry.startTime}
                     onChange={e => {
                       const updated = [...regularSchedule];
@@ -255,11 +258,7 @@ export default function PaymentForm({ students, settings, payment, isPastMode, o
                       setRegularSchedule(updated);
                     }}
                     className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm flex-1"
-                  >
-                    {TIME_SLOTS.map(t => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
+                  />
                 </div>
               ))}
             </div>
