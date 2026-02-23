@@ -166,6 +166,8 @@ export function useStore() {
 
   const deleteStudent = useCallback((id: string) => {
     setStudents(prev => prev.map(s => s.id === id ? { ...s, active: false } : s));
+    // Clean up schedule entries for withdrawn student
+    setSchedules(prev => prev.filter(s => s.studentId !== id));
   }, []);
 
   const permanentDeleteStudent = useCallback((id: string) => {
@@ -323,10 +325,20 @@ export function useStore() {
     setPayments(prev => {
       const payment = prev.find(p => p.id === id);
       if (payment) {
-        // Cascade: delete attendance records for this student from the payment's start date
+        const sid = payment.studentId;
+        // Check if any OTHER payment will remain for this student
+        const hasOtherPayment = prev.some(p => p.id !== id && p.studentId === sid);
+        // Cascade: delete attendance records from this payment's start date
         setAttendance(att => att.filter(a =>
-          !(a.studentId === payment.studentId && a.date >= payment.startDate)
+          !(a.studentId === sid && a.date >= payment.startDate)
         ));
+        // Clean up schedule entries (hidden overrides + non-regular slots) for the student
+        // Only if no other payment remains, clear all; otherwise clear only hidden overrides
+        if (!hasOtherPayment) {
+          setSchedules(sch => sch.filter(s => s.studentId !== sid));
+        } else {
+          setSchedules(sch => sch.filter(s => !(s.isOverrideHidden && s.studentId === sid)));
+        }
       }
       return prev.filter(p => p.id !== id);
     });

@@ -165,32 +165,48 @@ export default function ScheduleGrid() {
     setIsPdfExporting(true);
 
     try {
-      await new Promise(r => setTimeout(r, 300));
-
       const element = scheduleGridRef.current;
 
+      // Save original inline styles
+      const savedStyle = element.getAttribute('style') || '';
+
+      // Temporarily expand the element for full capture
+      element.style.overflow = 'visible';
+      element.style.maxHeight = 'none';
+      element.style.margin = '0';
+      element.style.borderRadius = '0';
+      element.style.border = 'none';
+
+      // Force browser layout recalculation
+      await new Promise<void>(resolve => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+
+      const captureWidth = element.scrollWidth;
+      const captureHeight = element.scrollHeight;
+
       const canvas = await html2canvas(element, {
-        scale: 1.5,
+        scale: 2,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
-        onclone: (_doc: Document, clonedEl: HTMLElement) => {
-          // Clean up clone for reliable capture
-          clonedEl.style.overflow = 'visible';
-          clonedEl.style.maxHeight = 'none';
-          clonedEl.style.height = 'auto';
-          clonedEl.style.margin = '0';
-          clonedEl.style.borderRadius = '0';
-          // Remove hover-only elements (attendance buttons, delete buttons)
-          clonedEl.querySelectorAll('[class*="group-hover"]').forEach(el => el.remove());
-        },
+        width: captureWidth,
+        height: captureHeight,
+        scrollX: 0,
+        scrollY: 0,
+        x: 0,
+        y: 0,
       });
 
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
+      // Restore original styles immediately
+      if (savedStyle) {
+        element.setAttribute('style', savedStyle);
+      } else {
+        element.removeAttribute('style');
+      }
 
-      const isLandscape = imgWidth > imgHeight;
+      const isLandscape = canvas.width > canvas.height;
       const pdf = new jsPDF({
         orientation: isLandscape ? 'landscape' : 'portrait',
         unit: 'mm',
@@ -203,19 +219,25 @@ export default function ScheduleGrid() {
       const availableWidth = pageWidth - margin * 2;
       const availableHeight = pageHeight - margin * 2;
 
-      const ratio = Math.min(availableWidth / imgWidth, availableHeight / imgHeight);
-      const finalWidth = imgWidth * ratio;
-      const finalHeight = imgHeight * ratio;
+      const ratio = Math.min(availableWidth / canvas.width, availableHeight / canvas.height);
+      const finalWidth = canvas.width * ratio;
+      const finalHeight = canvas.height * ratio;
       const xOffset = (pageWidth - finalWidth) / 2;
 
-      // Pass canvas element directly (avoids toDataURL issues on large canvases)
       pdf.addImage(canvas, 'PNG', xOffset, margin, finalWidth, finalHeight);
 
       const dateStr = getDateForDay(selectedDay);
       pdf.save(`스케줄_${selectedDay}요일_${dateStr}.pdf`);
     } catch (err) {
       console.error('PDF export failed:', err);
-      // Fallback: use browser print dialog
+      // Restore styles on error
+      if (scheduleGridRef.current) {
+        scheduleGridRef.current.style.overflow = '';
+        scheduleGridRef.current.style.maxHeight = '';
+        scheduleGridRef.current.style.margin = '';
+        scheduleGridRef.current.style.borderRadius = '';
+        scheduleGridRef.current.style.border = '';
+      }
       window.print();
     } finally {
       setIsPdfExporting(false);
