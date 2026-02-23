@@ -166,14 +166,12 @@ export default function ScheduleGrid() {
     // Mark the schedule grid for print CSS targeting
     el.setAttribute('data-print-target', 'true');
 
-    // Temporarily unconstrain the scroll container + all children so the full
-    // schedule height is visible to the browser's print engine.
+    // Temporarily unconstrain the scroll container so full height is measurable
     const saved = el.getAttribute('style') || '';
     el.style.overflow = 'visible';
     el.style.maxHeight = 'none';
     el.style.height = 'auto';
 
-    // Also unconstrain the inner wrapper (min-w container)
     const inner = el.firstElementChild as HTMLElement | null;
     const savedInner = inner?.getAttribute('style') || '';
     if (inner) {
@@ -181,14 +179,28 @@ export default function ScheduleGrid() {
       inner.style.minWidth = '0';
     }
 
-    requestAnimationFrame(() => {
+    // Use double-rAF to ensure layout is recalculated before measuring
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      // Measure full content height and scale to fit A4 single page
+      // A4 portrait at 96dpi ≈ 1123px height, minus ~80px for margins = ~1040px usable
+      const A4_USABLE_HEIGHT = 1040;
+      const contentHeight = el.scrollHeight;
+      if (contentHeight > A4_USABLE_HEIGHT) {
+        const scale = A4_USABLE_HEIGHT / contentHeight;
+        el.style.transform = `scale(${scale})`;
+        el.style.transformOrigin = 'top left';
+        // Compensate width so it fills the page at the scaled size
+        el.style.width = `${100 / scale}%`;
+      }
+
       window.print();
+
       // Restore original styles after print dialog closes
       if (saved) el.setAttribute('style', saved); else el.removeAttribute('style');
       if (inner) { if (savedInner) inner.setAttribute('style', savedInner); else inner.removeAttribute('style'); }
       el.removeAttribute('data-print-target');
       setIsPdfExporting(false);
-    });
+    }));
   }, [selectedDay]);
 
   // Compute unified time range across all days
