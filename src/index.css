@@ -8,6 +8,23 @@
 }
 
 /* =============================================
+   Print styles (fallback PDF export)
+   ============================================= */
+@media print {
+  body > #root > *:not(.schedule-print-target) {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .schedule-block [class*="group-hover"] {
+    display: none !important;
+  }
+}
+
+/* =============================================
    Smooth Drag & Drop Animations
    ============================================= */
 .schedule-block {

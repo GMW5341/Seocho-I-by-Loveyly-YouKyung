@@ -165,42 +165,28 @@ export default function ScheduleGrid() {
     setIsPdfExporting(true);
 
     try {
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 300));
 
       const element = scheduleGridRef.current;
 
-      // Temporarily remove overflow constraints for full capture
-      const origOverflow = element.style.overflow;
-      const origMaxHeight = element.style.maxHeight;
-      element.style.overflow = 'visible';
-      element.style.maxHeight = 'none';
-
-      // Also expand inner container
-      const inner = element.querySelector('div') as HTMLElement | null;
-      const origInnerOverflow = inner?.style.overflow || '';
-      if (inner) inner.style.overflow = 'visible';
-
-      // Get full scroll dimensions
-      const scrollWidth = element.scrollWidth;
-      const scrollHeight = element.scrollHeight;
-
       const canvas = await html2canvas(element, {
-        scale: 2,
+        scale: 1.5,
         useCORS: true,
+        allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
-        width: scrollWidth,
-        height: scrollHeight,
-        windowWidth: scrollWidth,
-        windowHeight: scrollHeight,
+        onclone: (_doc: Document, clonedEl: HTMLElement) => {
+          // Clean up clone for reliable capture
+          clonedEl.style.overflow = 'visible';
+          clonedEl.style.maxHeight = 'none';
+          clonedEl.style.height = 'auto';
+          clonedEl.style.margin = '0';
+          clonedEl.style.borderRadius = '0';
+          // Remove hover-only elements (attendance buttons, delete buttons)
+          clonedEl.querySelectorAll('[class*="group-hover"]').forEach(el => el.remove());
+        },
       });
 
-      // Restore original styles
-      element.style.overflow = origOverflow;
-      element.style.maxHeight = origMaxHeight;
-      if (inner) inner.style.overflow = origInnerOverflow;
-
-      const imgData = canvas.toDataURL('image/png');
       const imgWidth = canvas.width;
       const imgHeight = canvas.height;
 
@@ -222,26 +208,19 @@ export default function ScheduleGrid() {
       const finalHeight = imgHeight * ratio;
       const xOffset = (pageWidth - finalWidth) / 2;
 
-      pdf.addImage(imgData, 'PNG', xOffset, margin, finalWidth, finalHeight);
+      // Pass canvas element directly (avoids toDataURL issues on large canvases)
+      pdf.addImage(canvas, 'PNG', xOffset, margin, finalWidth, finalHeight);
 
-      // Use blob + link approach for reliable download
       const dateStr = getDateForDay(selectedDay);
-      const blob = pdf.output('blob');
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `스케줄_${selectedDay}요일_${dateStr}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      pdf.save(`스케줄_${selectedDay}요일_${dateStr}.pdf`);
     } catch (err) {
       console.error('PDF export failed:', err);
-      alert('PDF 저장에 실패했습니다. 다시 시도해주세요.');
+      // Fallback: use browser print dialog
+      window.print();
     } finally {
       setIsPdfExporting(false);
     }
-  }, [selectedDay]);
+  }, [selectedDay, getDateForDay]);
 
   // Compute unified time range across all days
   const timeRange = useMemo(() => {

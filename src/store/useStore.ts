@@ -310,6 +310,8 @@ export function useStore() {
       completed: false,
     };
     setPayments(prev => [...prev, newPayment]);
+    // Clear hidden schedule overrides for this student so schedule appears immediately
+    setSchedules(prev => prev.filter(s => !(s.isOverrideHidden && s.studentId === payment.studentId)));
     return newPayment;
   }, []);
 
@@ -318,7 +320,16 @@ export function useStore() {
   }, []);
 
   const deletePayment = useCallback((id: string) => {
-    setPayments(prev => prev.filter(p => p.id !== id));
+    setPayments(prev => {
+      const payment = prev.find(p => p.id === id);
+      if (payment) {
+        // Cascade: delete attendance records for this student from the payment's start date
+        setAttendance(att => att.filter(a =>
+          !(a.studentId === payment.studentId && a.date >= payment.startDate)
+        ));
+      }
+      return prev.filter(p => p.id !== id);
+    });
   }, []);
 
   // Holiday CRUD
