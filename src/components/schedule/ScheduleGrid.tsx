@@ -55,7 +55,7 @@ export default function ScheduleGrid() {
     moveSchedule, updateSchedule, removeSchedule, restoreSchedule, addSchedule,
     addTrialStudent, addTrialLesson,
     addAttendance, updateAttendance, deleteAttendance,
-    addPayment, updateStudent,
+    addPayment, updatePayment, updateStudent,
     specialClasses, specialClassStudents,
   } = useAppStore();
   const [showMakeupForm, setShowMakeupForm] = useState(false);
@@ -348,6 +348,23 @@ export default function ScheduleGrid() {
     return result;
   }, [filteredSchedules, specialClassSlots, unpaidStudentIds]);
 
+  // 전체 스케줄 삭제: 결제의 regularSchedule + store의 schedules 모두 초기화
+  const handleClearAllSchedules = useCallback(() => {
+    const visibleCount = filteredSchedules.length + specialClassSlots.length;
+    if (visibleCount === 0) return;
+    if (!confirm(`현재 표시된 스케줄 ${visibleCount}개를 모두 삭제하시겠습니까?\n(결제 정보의 정규 스케줄도 함께 제거됩니다)`)) return;
+
+    // 1. 모든 결제의 regularSchedule 초기화
+    payments.forEach(p => {
+      if (p.regularSchedule?.length) {
+        updatePayment(p.id, { regularSchedule: [] });
+      }
+    });
+
+    // 2. store의 비정규 스케줄 전부 삭제
+    schedules.forEach(s => removeSchedule(s.id));
+  }, [filteredSchedules, specialClassSlots, payments, schedules, updatePayment, removeSchedule]);
+
   // Drop validation
   const isDropValid = useCallback((day: DayOfWeek, time: string, slot: ScheduleSlot): boolean => {
     const hours = getOperatingHours(settings, day);
@@ -457,21 +474,22 @@ export default function ScheduleGrid() {
     setHoveredCell(null);
   };
 
-  // Delete with undo
+  // Delete with undo — for regular slots, permanently remove from payment's regularSchedule
   const handleDeleteSlot = (slot: ScheduleSlot, displayName: string) => {
     if (!confirm(`${displayName} 스케줄을 삭제하시겠습니까?`)) return;
     if (slot.isRegular) {
-      // 결제 기반 정규 슬롯: 이번 주에만 숨김 처리 (override hidden 마커 생성)
-      const dateStr = getDateForDay(slot.dayOfWeek);
-      addSchedule({
-        studentId: slot.studentId,
-        dayOfWeek: slot.dayOfWeek,
-        startTime: slot.startTime,
-        duration: slot.duration,
-        isRegular: false,
-        date: dateStr,
-        isOverrideHidden: true,
-      } as Omit<ScheduleSlot, 'id'>);
+      // 결제 기반 정규 슬롯: 결제의 regularSchedule에서 영구 제거
+      const payment = payments.find(p =>
+        p.studentId === slot.studentId &&
+        p.regularSchedule?.some(e => e.day === slot.dayOfWeek && e.startTime === slot.startTime)
+      );
+      if (payment) {
+        updatePayment(payment.id, {
+          regularSchedule: (payment.regularSchedule || []).filter(
+            e => !(e.day === slot.dayOfWeek && e.startTime === slot.startTime)
+          ),
+        });
+      }
     } else {
       removeSchedule(slot.id);
     }
@@ -483,16 +501,21 @@ export default function ScheduleGrid() {
   const handleUndo = () => {
     if (deletedSlot) {
       if (deletedSlot.isRegular) {
-        // 정규 슬롯 삭제 취소: override hidden 마커 제거
-        const dateStr = getDateForDay(deletedSlot.dayOfWeek);
-        const hiddenMarker = schedules.find(s =>
-          s.isOverrideHidden &&
-          s.studentId === deletedSlot.studentId &&
-          s.dayOfWeek === deletedSlot.dayOfWeek &&
-          s.startTime === deletedSlot.startTime &&
-          s.date === dateStr
-        );
-        if (hiddenMarker) removeSchedule(hiddenMarker.id);
+        // 정규 슬롯 삭제 취소: 결제의 regularSchedule에 다시 추가
+        const payment = payments.find(p =>
+          p.studentId === deletedSlot.studentId &&
+          !p.completed && p.remainingSessions > 0
+        ) || payments
+          .filter(p => p.studentId === deletedSlot.studentId && p.regularSchedule?.length)
+          .sort((a, b) => b.paidAt.localeCompare(a.paidAt))[0];
+        if (payment) {
+          updatePayment(payment.id, {
+            regularSchedule: [
+              ...(payment.regularSchedule || []),
+              { day: deletedSlot.dayOfWeek, startTime: deletedSlot.startTime },
+            ],
+          });
+        }
       } else {
         restoreSchedule(deletedSlot);
       }
@@ -760,13 +783,21 @@ export default function ScheduleGrid() {
               );
             })}
           </div>
+          <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={handleClearAllSchedules}
+            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-500 text-white hover:bg-gray-600 transition-colors"
+          >
+            전체 삭제
+          </button>
           <button
             onClick={handleExportPdf}
             disabled={isPdfExporting}
-            className="ml-auto px-4 py-1.5 rounded-lg text-sm font-medium bg-rose-600 text-white hover:bg-rose-700 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+            className="px-4 py-1.5 rounded-lg text-sm font-medium bg-rose-600 text-white hover:bg-rose-700 transition-colors disabled:opacity-50 flex items-center gap-1.5"
           >
             {isPdfExporting ? '준비 중...' : '인쇄 / PDF 저장'}
           </button>
+          </div>
         </div>
       )}
 
