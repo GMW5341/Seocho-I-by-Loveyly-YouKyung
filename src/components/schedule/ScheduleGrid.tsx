@@ -162,14 +162,31 @@ export default function ScheduleGrid() {
     if (!scheduleGridRef.current || !selectedDay) return;
     setIsPdfExporting(true);
 
+    const el = scheduleGridRef.current;
     // Mark the schedule grid for print CSS targeting
-    scheduleGridRef.current.setAttribute('data-print-target', 'true');
+    el.setAttribute('data-print-target', 'true');
 
-    // Small delay to ensure the attribute is applied
+    // Temporarily unconstrain the scroll container + all children so the full
+    // schedule height is visible to the browser's print engine.
+    const saved = el.getAttribute('style') || '';
+    el.style.overflow = 'visible';
+    el.style.maxHeight = 'none';
+    el.style.height = 'auto';
+
+    // Also unconstrain the inner wrapper (min-w container)
+    const inner = el.firstElementChild as HTMLElement | null;
+    const savedInner = inner?.getAttribute('style') || '';
+    if (inner) {
+      inner.style.overflow = 'visible';
+      inner.style.minWidth = '0';
+    }
+
     requestAnimationFrame(() => {
       window.print();
-      // Clean up after print dialog closes
-      scheduleGridRef.current?.removeAttribute('data-print-target');
+      // Restore original styles after print dialog closes
+      if (saved) el.setAttribute('style', saved); else el.removeAttribute('style');
+      if (inner) { if (savedInner) inner.setAttribute('style', savedInner); else inner.removeAttribute('style'); }
+      el.removeAttribute('data-print-target');
       setIsPdfExporting(false);
     });
   }, [selectedDay]);
