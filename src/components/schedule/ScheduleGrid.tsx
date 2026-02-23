@@ -1247,7 +1247,7 @@ export default function ScheduleGrid() {
                   <button
                     onClick={() => {
                       const today = format(new Date(), 'yyyy-MM-dd');
-                      const newPayment = addPayment({
+                      addPayment({
                         studentId: student.id,
                         amount: lastPayment.amount,
                         originalAmount: lastPayment.originalAmount,
