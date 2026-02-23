@@ -123,6 +123,27 @@ export function useStore() {
     }
   }, []);
 
+  // One-time data cleanup: remove orphaned schedule entries for students without payments
+  const hasCleanedUp = useRef(false);
+  useEffect(() => {
+    if (hasCleanedUp.current) return;
+    hasCleanedUp.current = true;
+    const paymentStudentIds = new Set(payments.map(p => p.studentId));
+    const activeStudentIds = new Set(students.filter(s => s.active).map(s => s.id));
+    setSchedules(prev => {
+      const cleaned = prev.filter(s => {
+        if (!s.studentId) return true; // trial/special class entries
+        // Remove entries for inactive students with no payments
+        if (!activeStudentIds.has(s.studentId) && !paymentStudentIds.has(s.studentId)) return false;
+        // Remove override hidden entries for students without payments
+        if (s.isOverrideHidden && !paymentStudentIds.has(s.studentId)) return false;
+        return true;
+      });
+      return cleaned.length === prev.length ? prev : cleaned;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Persist to localStorage on changes + trigger cloud sync
   useEffect(() => { saveToStorage(STORAGE_KEYS.students, students); scheduleCloudPush(); }, [students, scheduleCloudPush]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.schedules, schedules); scheduleCloudPush(); }, [schedules, scheduleCloudPush]);

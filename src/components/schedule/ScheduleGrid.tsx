@@ -165,45 +165,47 @@ export default function ScheduleGrid() {
     setIsPdfExporting(true);
 
     try {
-      const element = scheduleGridRef.current;
+      const wrapper = scheduleGridRef.current;
+      const content = wrapper.firstElementChild as HTMLElement;
+      if (!content) throw new Error('No content element');
 
-      // Save original inline styles
-      const savedStyle = element.getAttribute('style') || '';
+      // Save original wrapper styles and temporarily unconstrain
+      const savedWrapperStyle = wrapper.getAttribute('style') || '';
+      wrapper.style.overflow = 'visible';
+      wrapper.style.maxHeight = 'none';
+      wrapper.style.height = 'auto';
+      wrapper.style.margin = '0';
+      wrapper.style.borderRadius = '0';
+      wrapper.style.border = 'none';
 
-      // Temporarily expand the element for full capture
-      element.style.overflow = 'visible';
-      element.style.maxHeight = 'none';
-      element.style.margin = '0';
-      element.style.borderRadius = '0';
-      element.style.border = 'none';
+      // Also ensure content is fully visible
+      const savedContentStyle = content.getAttribute('style') || '';
+      content.style.overflow = 'visible';
 
-      // Force browser layout recalculation
+      // Force browser layout recalculation (double rAF)
       await new Promise<void>(resolve => {
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
       });
 
-      const captureWidth = element.scrollWidth;
-      const captureHeight = element.scrollHeight;
-
-      const canvas = await html2canvas(element, {
+      // Capture the INNER content div (not the overflow wrapper)
+      const canvas = await html2canvas(content, {
         scale: 2,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
-        width: captureWidth,
-        height: captureHeight,
-        scrollX: 0,
-        scrollY: 0,
-        x: 0,
-        y: 0,
       });
 
       // Restore original styles immediately
-      if (savedStyle) {
-        element.setAttribute('style', savedStyle);
+      if (savedWrapperStyle) {
+        wrapper.setAttribute('style', savedWrapperStyle);
       } else {
-        element.removeAttribute('style');
+        wrapper.removeAttribute('style');
+      }
+      if (savedContentStyle) {
+        content.setAttribute('style', savedContentStyle);
+      } else {
+        content.removeAttribute('style');
       }
 
       const isLandscape = canvas.width > canvas.height;
@@ -232,11 +234,7 @@ export default function ScheduleGrid() {
       console.error('PDF export failed:', err);
       // Restore styles on error
       if (scheduleGridRef.current) {
-        scheduleGridRef.current.style.overflow = '';
-        scheduleGridRef.current.style.maxHeight = '';
-        scheduleGridRef.current.style.margin = '';
-        scheduleGridRef.current.style.borderRadius = '';
-        scheduleGridRef.current.style.border = '';
+        scheduleGridRef.current.removeAttribute('style');
       }
       window.print();
     } finally {
