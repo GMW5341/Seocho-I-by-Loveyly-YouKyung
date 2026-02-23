@@ -157,48 +157,45 @@ export default function ScheduleGrid() {
     }
   };
 
-  // PDF Export: use browser print dialog (reliable, supports Korean text, no blank pages)
+  // PDF Export: clone schedule into a standalone container outside #root,
+  // then use CSS zoom (affects real layout) to fit A4 single page.
   const handleExportPdf = useCallback(() => {
-    if (!scheduleGridRef.current || !selectedDay) return;
+    const el = scheduleGridRef.current;
+    if (!el || !selectedDay) return;
     setIsPdfExporting(true);
 
-    const el = scheduleGridRef.current;
-    // Mark the schedule grid for print CSS targeting
-    el.setAttribute('data-print-target', 'true');
+    // 1. Clone the schedule grid (React DOM untouched)
+    const clone = el.cloneNode(true) as HTMLElement;
+    clone.style.cssText = 'overflow:visible; max-height:none; height:auto; margin:0; border:none; border-radius:0; background:white;';
+    const innerClone = clone.firstElementChild as HTMLElement | null;
+    if (innerClone) innerClone.style.cssText = 'overflow:visible; min-width:0;';
 
-    // Temporarily unconstrain the scroll container so full height is measurable
-    const saved = el.getAttribute('style') || '';
-    el.style.overflow = 'visible';
-    el.style.maxHeight = 'none';
-    el.style.height = 'auto';
+    // 2. Create a wrapper in normal document flow (NOT position:absolute)
+    const wrapper = document.createElement('div');
+    wrapper.id = 'schedule-print-wrapper';
+    wrapper.style.cssText = 'background:white; width:100%;';
+    wrapper.appendChild(clone);
 
-    const inner = el.firstElementChild as HTMLElement | null;
-    const savedInner = inner?.getAttribute('style') || '';
-    if (inner) {
-      inner.style.overflow = 'visible';
-      inner.style.minWidth = '0';
-    }
+    // 3. Hide #root, add wrapper to body as the sole visible content
+    const root = document.getElementById('root');
+    if (root) root.style.display = 'none';
+    document.body.appendChild(wrapper);
 
-    // Use double-rAF to ensure layout is recalculated before measuring
+    // 4. Double-rAF for layout recalc, then measure & zoom
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      // Measure full content height and scale to fit A4 single page
-      // A4 portrait at 96dpi ≈ 1123px height, minus ~80px for margins = ~1040px usable
-      const A4_USABLE_HEIGHT = 1040;
-      const contentHeight = el.scrollHeight;
-      if (contentHeight > A4_USABLE_HEIGHT) {
-        const scale = A4_USABLE_HEIGHT / contentHeight;
-        el.style.transform = `scale(${scale})`;
-        el.style.transformOrigin = 'top left';
-        // Compensate width so it fills the page at the scaled size
-        el.style.width = `${100 / scale}%`;
+      // A4 portrait at 96dpi ≈ 1123px, minus ~10mm margins each side ≈ 1040px usable
+      const A4_USABLE = 1040;
+      const fullHeight = clone.scrollHeight;
+      if (fullHeight > A4_USABLE) {
+        // zoom (unlike transform) changes actual layout size → browser paginates correctly
+        wrapper.style.setProperty('zoom', String(A4_USABLE / fullHeight));
       }
 
       window.print();
 
-      // Restore original styles after print dialog closes
-      if (saved) el.setAttribute('style', saved); else el.removeAttribute('style');
-      if (inner) { if (savedInner) inner.setAttribute('style', savedInner); else inner.removeAttribute('style'); }
-      el.removeAttribute('data-print-target');
+      // 5. Cleanup: remove wrapper, restore #root
+      document.body.removeChild(wrapper);
+      if (root) root.style.display = '';
       setIsPdfExporting(false);
     }));
   }, [selectedDay]);
