@@ -8,19 +8,64 @@
 }
 
 /* =============================================
-   Print styles (fallback PDF export)
+   Print styles (schedule PDF export via window.print)
    ============================================= */
 @media print {
-  body > #root > *:not(.schedule-print-target) {
-    display: none !important;
-  }
-  body {
+  /* Hide everything except the print target */
+  body, html {
     background: white !important;
     margin: 0 !important;
     padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
+
+  /* Hide all non-essential elements */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Show only the schedule grid that has the data-print-target attribute */
+  [data-print-target],
+  [data-print-target] * {
+    visibility: visible !important;
+  }
+
+  [data-print-target] {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  /* Hide hover-only elements (attendance buttons, delete buttons) */
   .schedule-block [class*="group-hover"] {
     display: none !important;
+  }
+
+  /* Hide the delete X button */
+  .schedule-block button {
+    display: none !important;
+  }
+
+  /* Ensure schedule blocks print with correct colors */
+  .schedule-block {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Page setup */
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
   }
 }
 

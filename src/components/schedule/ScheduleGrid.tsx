@@ -20,8 +20,6 @@ import {
 import Modal from '../common/Modal';
 import MakeupForm from './MakeupForm';
 import TrialForm from './TrialForm';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 
 const PX_PER_MINUTE_WEEK = 2.5;
 const PX_PER_MINUTE_DAY = 4;
@@ -159,88 +157,22 @@ export default function ScheduleGrid() {
     }
   };
 
-  // PDF Export function for day view
-  const handleExportPdf = useCallback(async () => {
+  // PDF Export: use browser print dialog (reliable, supports Korean text, no blank pages)
+  const handleExportPdf = useCallback(() => {
     if (!scheduleGridRef.current || !selectedDay) return;
     setIsPdfExporting(true);
 
-    try {
-      const wrapper = scheduleGridRef.current;
-      const content = wrapper.firstElementChild as HTMLElement;
-      if (!content) throw new Error('No content element');
+    // Mark the schedule grid for print CSS targeting
+    scheduleGridRef.current.setAttribute('data-print-target', 'true');
 
-      // Save original wrapper styles and temporarily unconstrain
-      const savedWrapperStyle = wrapper.getAttribute('style') || '';
-      wrapper.style.overflow = 'visible';
-      wrapper.style.maxHeight = 'none';
-      wrapper.style.height = 'auto';
-      wrapper.style.margin = '0';
-      wrapper.style.borderRadius = '0';
-      wrapper.style.border = 'none';
-
-      // Also ensure content is fully visible
-      const savedContentStyle = content.getAttribute('style') || '';
-      content.style.overflow = 'visible';
-
-      // Force browser layout recalculation (double rAF)
-      await new Promise<void>(resolve => {
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-      });
-
-      // Capture the INNER content div (not the overflow wrapper)
-      const canvas = await html2canvas(content, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-      });
-
-      // Restore original styles immediately
-      if (savedWrapperStyle) {
-        wrapper.setAttribute('style', savedWrapperStyle);
-      } else {
-        wrapper.removeAttribute('style');
-      }
-      if (savedContentStyle) {
-        content.setAttribute('style', savedContentStyle);
-      } else {
-        content.removeAttribute('style');
-      }
-
-      const isLandscape = canvas.width > canvas.height;
-      const pdf = new jsPDF({
-        orientation: isLandscape ? 'landscape' : 'portrait',
-        unit: 'mm',
-        format: 'a4',
-      });
-
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 10;
-      const availableWidth = pageWidth - margin * 2;
-      const availableHeight = pageHeight - margin * 2;
-
-      const ratio = Math.min(availableWidth / canvas.width, availableHeight / canvas.height);
-      const finalWidth = canvas.width * ratio;
-      const finalHeight = canvas.height * ratio;
-      const xOffset = (pageWidth - finalWidth) / 2;
-
-      pdf.addImage(canvas, 'PNG', xOffset, margin, finalWidth, finalHeight);
-
-      const dateStr = getDateForDay(selectedDay);
-      pdf.save(`스케줄_${selectedDay}요일_${dateStr}.pdf`);
-    } catch (err) {
-      console.error('PDF export failed:', err);
-      // Restore styles on error
-      if (scheduleGridRef.current) {
-        scheduleGridRef.current.removeAttribute('style');
-      }
+    // Small delay to ensure the attribute is applied
+    requestAnimationFrame(() => {
       window.print();
-    } finally {
+      // Clean up after print dialog closes
+      scheduleGridRef.current?.removeAttribute('data-print-target');
       setIsPdfExporting(false);
-    }
-  }, [selectedDay, getDateForDay]);
+    });
+  }, [selectedDay]);
 
   // Compute unified time range across all days
   const timeRange = useMemo(() => {
@@ -807,14 +739,7 @@ export default function ScheduleGrid() {
             disabled={isPdfExporting}
             className="ml-auto px-4 py-1.5 rounded-lg text-sm font-medium bg-rose-600 text-white hover:bg-rose-700 transition-colors disabled:opacity-50 flex items-center gap-1.5"
           >
-            {isPdfExporting ? (
-              <>
-                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                내보내는 중...
-              </>
-            ) : (
-              <>PDF 저장</>
-            )}
+            {isPdfExporting ? '준비 중...' : '인쇄 / PDF 저장'}
           </button>
         </div>
       )}

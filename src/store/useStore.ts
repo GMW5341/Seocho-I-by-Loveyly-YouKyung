@@ -123,24 +123,52 @@ export function useStore() {
     }
   }, []);
 
-  // One-time data cleanup: remove orphaned schedule entries for students without payments
+  // One-time data cleanup: remove orphaned data on mount
   const hasCleanedUp = useRef(false);
   useEffect(() => {
     if (hasCleanedUp.current) return;
     hasCleanedUp.current = true;
+
+    // 1. Clean up orphaned schedule entries
     const paymentStudentIds = new Set(payments.map(p => p.studentId));
     const activeStudentIds = new Set(students.filter(s => s.active).map(s => s.id));
     setSchedules(prev => {
       const cleaned = prev.filter(s => {
-        if (!s.studentId) return true; // trial/special class entries
-        // Remove entries for inactive students with no payments
+        if (!s.studentId) return true;
         if (!activeStudentIds.has(s.studentId) && !paymentStudentIds.has(s.studentId)) return false;
-        // Remove override hidden entries for students without payments
         if (s.isOverrideHidden && !paymentStudentIds.has(s.studentId)) return false;
         return true;
       });
       return cleaned.length === prev.length ? prev : cleaned;
     });
+
+    // 2. Clean up stale completed-only payments (students with no active payment
+    //    whose completed payment period has long passed → remove to prevent 미결제 fallback)
+    const today = new Date().toISOString().slice(0, 10);
+    const staleStudentIds = new Set<string>();
+    const studentPaymentMap = new Map<string, typeof payments>();
+    payments.forEach(p => {
+      if (!studentPaymentMap.has(p.studentId)) studentPaymentMap.set(p.studentId, []);
+      studentPaymentMap.get(p.studentId)!.push(p);
+    });
+    studentPaymentMap.forEach((studentPayments, sid) => {
+      const hasActive = studentPayments.some(p => !p.completed && p.remainingSessions > 0);
+      if (hasActive) return; // has active payment → keep
+      // Only completed payments remain → check if stale
+      const latest = studentPayments.sort((a, b) => b.paidAt.localeCompare(a.paidAt))[0];
+      if (!latest) return;
+      const sessionsPerWeek = latest.regularSchedule?.length || latest.sessionsPerWeek || 1;
+      const estimatedWeeks = Math.ceil(latest.totalSessions / sessionsPerWeek);
+      const endDate = new Date(latest.startDate);
+      endDate.setDate(endDate.getDate() + estimatedWeeks * 7 + 28); // +4 weeks buffer
+      if (endDate.toISOString().slice(0, 10) < today) {
+        staleStudentIds.add(sid);
+      }
+    });
+    if (staleStudentIds.size > 0) {
+      setPayments(prev => prev.filter(p => !staleStudentIds.has(p.studentId)));
+      setSchedules(prev => prev.filter(s => !staleStudentIds.has(s.studentId)));
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -347,18 +375,18 @@ export function useStore() {
       const payment = prev.find(p => p.id === id);
       if (payment) {
         const sid = payment.studentId;
-        // Check if any OTHER payment will remain for this student
-        const hasOtherPayment = prev.some(p => p.id !== id && p.studentId === sid);
+        const remaining = prev.filter(p => p.id !== id && p.studentId === sid);
+        const hasActiveRemaining = remaining.some(p => !p.completed && p.remainingSessions > 0);
         // Cascade: delete attendance records from this payment's start date
         setAttendance(att => att.filter(a =>
           !(a.studentId === sid && a.date >= payment.startDate)
         ));
-        // Clean up schedule entries (hidden overrides + non-regular slots) for the student
-        // Only if no other payment remains, clear all; otherwise clear only hidden overrides
-        if (!hasOtherPayment) {
-          setSchedules(sch => sch.filter(s => s.studentId !== sid));
-        } else {
-          setSchedules(sch => sch.filter(s => !(s.isOverrideHidden && s.studentId === sid)));
+        // Always clean up schedule entries for this student
+        setSchedules(sch => sch.filter(s => s.studentId !== sid));
+        if (!hasActiveRemaining) {
+          // No active payment remains → remove ALL payments (including completed)
+          // to prevent 미결제 fallback from old completed payments
+          return prev.filter(p => p.studentId !== sid);
         }
       }
       return prev.filter(p => p.id !== id);
