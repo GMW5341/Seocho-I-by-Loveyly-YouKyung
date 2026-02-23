@@ -19,11 +19,73 @@ import {
 } from './services/firebaseSync';
 
 // ============================================================
-// 3D Amusement Park Interactive Loading Screen
+// 3D Amusement Park Interactive Loading Screen (Time-Aware)
 // ============================================================
 const BALLOON_COLORS = ['#FF6B6B', '#FFE66D', '#4ECDC4', '#45B7D1', '#96CEB4', '#FF9FF3', '#F8B500', '#6C5CE7'];
 const EMOJI_ITEMS = ['🎡', '🎢', '🎠', '🎪', '🎨', '🖌️', '🌈', '⭐', '🎵', '🎶', '🦋', '🌸'];
 const FLOAT_ITEMS = ['🎨', '🖌️', '🌈', '⭐', '🎵', '🦋', '🌸', '✨', '💫', '🎭'];
+
+type TimeTheme = 'morning' | 'afternoon' | 'sunset' | 'night';
+
+function getTimeTheme(): TimeTheme {
+  const hour = new Date().getHours();
+  if (hour >= 6 && hour < 12) return 'morning';
+  if (hour >= 12 && hour < 17) return 'afternoon';
+  if (hour >= 17 && hour < 20) return 'sunset';
+  return 'night';
+}
+
+const TIME_THEME_CONFIG: Record<TimeTheme, {
+  bg: string;
+  sunEmoji: string;
+  sunGradient: string;
+  showStars: boolean;
+  showMoon: boolean;
+  cloudOpacity: number;
+  groundColors: [string, string, string];
+  greeting: string;
+}> = {
+  morning: {
+    bg: 'linear-gradient(180deg, #87CEEB 0%, #B0E0FF 25%, #E0F0FF 50%, #FFECD2 75%, #FCB69F 100%)',
+    sunEmoji: '🌅',
+    sunGradient: 'from-orange-200 via-yellow-300 to-orange-400',
+    showStars: false,
+    showMoon: false,
+    cloudOpacity: 0.9,
+    groundColors: ['#86efac', '#4ade80', '#22c55e'],
+    greeting: '좋은 아침이에요!',
+  },
+  afternoon: {
+    bg: 'linear-gradient(180deg, #4A90D9 0%, #87CEEB 30%, #B0E0FF 60%, #90EE90 85%, #4CAF50 100%)',
+    sunEmoji: '😊',
+    sunGradient: 'from-yellow-200 via-yellow-300 to-orange-400',
+    showStars: false,
+    showMoon: false,
+    cloudOpacity: 0.95,
+    groundColors: ['#4ade80', '#22c55e', '#16a34a'],
+    greeting: '활기찬 오후에요!',
+  },
+  sunset: {
+    bg: 'linear-gradient(180deg, #2D1B69 0%, #8B3A62 20%, #E94560 40%, #FF8C42 60%, #FFD700 80%, #FFECD2 100%)',
+    sunEmoji: '🌇',
+    sunGradient: 'from-orange-300 via-red-400 to-rose-500',
+    showStars: true,
+    showMoon: false,
+    cloudOpacity: 0.7,
+    groundColors: ['#6b8f5e', '#4a7a3e', '#2d5a1e'],
+    greeting: '노을이 아름다운 저녁이에요!',
+  },
+  night: {
+    bg: 'linear-gradient(180deg, #0a0a23 0%, #1a1a3e 20%, #16213e 40%, #1a2a5e 60%, #0f2040 80%, #1a3a2e 100%)',
+    sunEmoji: '🌙',
+    sunGradient: 'from-blue-100 via-gray-200 to-blue-200',
+    showStars: true,
+    showMoon: true,
+    cloudOpacity: 0.3,
+    groundColors: ['#1a4a2e', '#0f3a1e', '#082a12'],
+    greeting: '별이 빛나는 밤이에요!',
+  },
+};
 
 function AmusementParkLoader({ status }: { status: string }) {
   const [sparkles, setSparkles] = useState<Array<{ id: number; x: number; y: number; emoji: string; z: number }>>([]);
@@ -31,6 +93,9 @@ function AmusementParkLoader({ status }: { status: string }) {
   const [floatingItems, setFloatingItems] = useState<Array<{ id: number; x: number; y: number; emoji: string; delay: number; speed: number }>>([]);
   const sparkleIdRef = useRef(0);
   const balloonIdRef = useRef(0);
+
+  const theme = getTimeTheme();
+  const config = TIME_THEME_CONFIG[theme];
 
   // Initialize floating 3D items
   useEffect(() => {
@@ -84,36 +149,66 @@ function AmusementParkLoader({ status }: { status: string }) {
 
   return (
     <div
-      className="park-loader-3d fixed inset-0 flex flex-col items-center justify-center min-h-screen z-[9999]"
+      className="fixed inset-0 flex flex-col items-center justify-center min-h-screen z-[9999] overflow-hidden cursor-pointer select-none"
       onClick={handleClick}
-      style={{ perspective: '1200px' }}
+      style={{ perspective: '1200px', background: config.bg, transformStyle: 'preserve-3d' }}
     >
-      {/* Animated stars background */}
-      <div className="stars-bg" />
+      {/* Stars (sunset & night) */}
+      {config.showStars && <div className="stars-bg" />}
 
-      {/* 3D Sun with glow */}
-      <div className="absolute top-6 right-8 md:top-10 md:right-16 sun-3d">
-        <div className="relative">
-          <div className="sun-glow" />
-          <div className="sun-rays-3d">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div
-                key={i}
-                className="sun-ray"
-                style={{ transform: `rotate(${i * 30}deg)` }}
-              />
-            ))}
-          </div>
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-yellow-200 via-yellow-300 to-orange-400 shadow-lg flex items-center justify-center text-2xl sun-face">
-            😊
+      {/* Moon (night only) */}
+      {config.showMoon && (
+        <div className="absolute top-8 left-10 md:top-12 md:left-16 moon-3d">
+          <div className="relative">
+            <div className="absolute -inset-8 rounded-full" style={{ background: 'radial-gradient(circle, rgba(200,220,255,0.3) 0%, transparent 70%)' }} />
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-gray-100 via-blue-50 to-gray-200 shadow-lg shadow-blue-200/30 flex items-center justify-center text-2xl">
+              🌙
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Sun/Sunset (not night) */}
+      {!config.showMoon && (
+        <div className="absolute top-6 right-8 md:top-10 md:right-16 sun-3d">
+          <div className="relative">
+            <div className="sun-glow" />
+            <div className="sun-rays-3d">
+              {Array.from({ length: 12 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="sun-ray"
+                  style={{ transform: `rotate(${i * 30}deg)` }}
+                />
+              ))}
+            </div>
+            <div className={`w-16 h-16 rounded-full bg-gradient-to-br ${config.sunGradient} shadow-lg flex items-center justify-center text-2xl sun-face`}>
+              {config.sunEmoji}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 3D Clouds with depth */}
-      <div className="cloud-3d cloud-3d-1" style={{ transform: 'translateZ(50px)' }} />
-      <div className="cloud-3d cloud-3d-2" style={{ transform: 'translateZ(-30px)' }} />
-      <div className="cloud-3d cloud-3d-3" style={{ transform: 'translateZ(20px)' }} />
+      <div className="cloud-3d cloud-3d-1" style={{ transform: 'translateZ(50px)', opacity: config.cloudOpacity }} />
+      <div className="cloud-3d cloud-3d-2" style={{ transform: 'translateZ(-30px)', opacity: config.cloudOpacity * 0.7 }} />
+      <div className="cloud-3d cloud-3d-3" style={{ transform: 'translateZ(20px)', opacity: config.cloudOpacity * 0.85 }} />
+
+      {/* Night: extra shooting stars */}
+      {theme === 'night' && (
+        <>
+          <div className="shooting-star" style={{ top: '12%', left: '15%', animationDelay: '0s' }} />
+          <div className="shooting-star" style={{ top: '8%', left: '55%', animationDelay: '2.5s' }} />
+          <div className="shooting-star" style={{ top: '20%', left: '75%', animationDelay: '5s' }} />
+        </>
+      )}
+
+      {/* Sunset: warm light rays */}
+      {theme === 'sunset' && (
+        <div className="absolute inset-0 pointer-events-none" style={{
+          background: 'radial-gradient(ellipse at 85% 40%, rgba(255,140,0,0.15) 0%, transparent 60%)',
+        }} />
+      )}
 
       {/* Floating 3D emoji particles */}
       {floatingItems.map(item => (
@@ -176,22 +271,21 @@ function AmusementParkLoader({ status }: { status: string }) {
       <div className="relative z-10 flex flex-col items-center gap-6 px-4 scene-3d">
         {/* 3D Ferris Wheel */}
         <div className="relative w-36 h-36 md:w-44 md:h-44 ferris-container-3d">
+          {/* Night: neon glow on wheel */}
+          {theme === 'night' && (
+            <div className="absolute inset-0 rounded-full" style={{ filter: 'blur(20px)', background: 'radial-gradient(circle, rgba(99,102,241,0.3) 0%, transparent 70%)' }} />
+          )}
           <svg viewBox="0 0 120 120" className="w-full h-full drop-shadow-xl">
-            {/* Base platform */}
             <rect x="30" y="93" width="60" height="4" rx="2" fill="#8B7355" opacity="0.8" />
-            {/* Support legs */}
             <line x1="60" y1="55" x2="38" y2="93" stroke="#8B7355" strokeWidth="3.5" strokeLinecap="round" />
             <line x1="60" y1="55" x2="82" y2="93" stroke="#8B7355" strokeWidth="3.5" strokeLinecap="round" />
-            {/* Center hub with glow */}
-            <circle cx="60" cy="55" r="6" fill="#818cf8" />
+            <circle cx="60" cy="55" r="6" fill={theme === 'night' ? '#a5b4fc' : '#818cf8'} />
             <circle cx="60" cy="55" r="4" fill="#6366f1" />
             <circle cx="59" cy="54" r="2" fill="white" opacity="0.4" />
-            {/* Rotating wheel */}
             <g className="ferris-wheel" style={{ transformOrigin: '60px 55px' }}>
-              <circle cx="60" cy="55" r="34" fill="none" stroke="#a5b4fc" strokeWidth="1" />
+              <circle cx="60" cy="55" r="34" fill="none" stroke={theme === 'night' ? '#c7d2fe' : '#a5b4fc'} strokeWidth="1" />
               <circle cx="60" cy="55" r="32" fill="none" stroke="#6366f1" strokeWidth="2.5" />
               <circle cx="60" cy="55" r="16" fill="none" stroke="#6366f1" strokeWidth="1" opacity="0.3" />
-              {/* Spokes + 3D gondolas */}
               {Array.from({ length: 8 }).map((_, i) => {
                 const angle = (i * 45 - 90) * (Math.PI / 180);
                 const x = 60 + 32 * Math.cos(angle);
@@ -200,12 +294,11 @@ function AmusementParkLoader({ status }: { status: string }) {
                 return (
                   <g key={i}>
                     <line x1="60" y1="55" x2={x} y2={y} stroke="#818cf8" strokeWidth="1" opacity="0.4" />
-                    {/* Gondola body */}
                     <rect x={x - 5.5} y={y - 1} width="11" height="9" rx="2.5" fill={colors[i]} />
-                    {/* Gondola highlight */}
                     <rect x={x - 5.5} y={y - 1} width="11" height="3.5" rx="2" fill="white" opacity="0.25" />
-                    {/* Gondola hanger */}
                     <line x1={x} y1={y - 3} x2={x} y2={y - 1} stroke={colors[i]} strokeWidth="1.5" />
+                    {/* Night: gondola glow */}
+                    {theme === 'night' && <circle cx={x} cy={y + 3} r="6" fill={colors[i]} opacity="0.15" />}
                   </g>
                 );
               })}
@@ -226,11 +319,11 @@ function AmusementParkLoader({ status }: { status: string }) {
             <span className="bounce-2 text-3xl md:text-4xl" style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.2))' }}>🖌️</span>
           </div>
           <p className="text-white/80 text-sm drop-shadow-sm tracking-wide">
-            {status || '놀이동산 준비 중...'}
+            {status || config.greeting}
           </p>
         </div>
 
-        {/* 3D Loading bar with depth */}
+        {/* 3D Loading bar */}
         <div className="w-64 md:w-80 loading-bar-3d">
           <div className="h-4 bg-white/20 rounded-full overflow-hidden backdrop-blur-md shadow-inner border border-white/20">
             <div className="loading-bar-fill-3d h-full rounded-full" />
@@ -240,13 +333,18 @@ function AmusementParkLoader({ status }: { status: string }) {
 
         {/* 3D Bouncing characters */}
         <div className="flex gap-6 mt-2">
-          {['🎡', '🎢', '🎠', '🎪'].map((emoji, i) => (
+          {(theme === 'night'
+            ? ['🎡', '🎆', '🎇', '🎪']
+            : theme === 'sunset'
+            ? ['🎡', '🌅', '🎠', '🎪']
+            : ['🎡', '🎢', '🎠', '🎪']
+          ).map((emoji, i) => (
             <span
               key={i}
               className={`bounce-${(i % 3) + 1} text-4xl md:text-5xl cursor-pointer hover:scale-125 transition-transform char-3d`}
               style={{
                 animationDelay: `${i * 0.3}s`,
-                filter: 'drop-shadow(0 6px 8px rgba(0,0,0,0.25))',
+                filter: `drop-shadow(0 6px 8px rgba(0,0,0,${theme === 'night' ? 0.4 : 0.25}))`,
               }}
             >
               {emoji}
@@ -257,19 +355,36 @@ function AmusementParkLoader({ status }: { status: string }) {
 
       {/* 3D Ground with perspective */}
       <div className="absolute bottom-0 left-0 right-0 ground-3d pointer-events-none">
-        {/* Rolling hills */}
         <svg className="absolute bottom-0 w-full" viewBox="0 0 1200 120" preserveAspectRatio="none" style={{ height: '80px' }}>
-          <path d="M0,80 C200,20 400,100 600,50 C800,0 1000,60 1200,30 L1200,120 L0,120 Z" fill="#4ade80" opacity="0.4" />
-          <path d="M0,90 C300,40 500,110 700,60 C900,10 1100,80 1200,50 L1200,120 L0,120 Z" fill="#22c55e" opacity="0.5" />
-          <path d="M0,100 C150,80 350,105 600,85 C850,65 1050,100 1200,80 L1200,120 L0,120 Z" fill="#16a34a" opacity="0.6" />
+          <path d="M0,80 C200,20 400,100 600,50 C800,0 1000,60 1200,30 L1200,120 L0,120 Z" fill={config.groundColors[0]} opacity="0.4" />
+          <path d="M0,90 C300,40 500,110 700,60 C900,10 1100,80 1200,50 L1200,120 L0,120 Z" fill={config.groundColors[1]} opacity="0.5" />
+          <path d="M0,100 C150,80 350,105 600,85 C850,65 1050,100 1200,80 L1200,120 L0,120 Z" fill={config.groundColors[2]} opacity="0.6" />
         </svg>
-        {/* Flags with 3D perspective */}
+        {/* Night: tiny ground lights */}
+        {theme === 'night' && (
+          <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-8">
+            {Array.from({ length: 14 }).map((_, i) => (
+              <div
+                key={i}
+                className="w-1.5 h-1.5 rounded-full"
+                style={{
+                  background: ['#FFE66D', '#FF9FF3', '#4ECDC4', '#FF6B6B'][i % 4],
+                  boxShadow: `0 0 6px ${['#FFE66D', '#FF9FF3', '#4ECDC4', '#FF6B6B'][i % 4]}`,
+                  animation: `twinkle 1.5s ease-in-out infinite ${i * 0.2}s`,
+                }}
+              />
+            ))}
+          </div>
+        )}
+        {/* Flags */}
         <div className="absolute bottom-8 left-0 right-0 flex justify-center gap-5">
           {Array.from({ length: 10 }).map((_, i) => (
             <div key={i} className="flex flex-col items-center flag-3d" style={{ animationDelay: `${i * 0.1}s` }}>
-              <div className="w-1 h-6 bg-amber-800/50 rounded-t" />
+              <div className={`w-1 h-6 rounded-t ${theme === 'night' ? 'bg-amber-900/30' : 'bg-amber-800/50'}`} />
               <div className="flag-wave text-lg" style={{ animationDelay: `${i * 0.15}s` }}>
-                {['🚩', '🏁', '🎌', '🎏', '🚩'][i % 5]}
+                {theme === 'night'
+                  ? ['🏮', '🎆', '🏮', '🎇', '🏮'][i % 5]
+                  : ['🚩', '🏁', '🎌', '🎏', '🚩'][i % 5]}
               </div>
             </div>
           ))}

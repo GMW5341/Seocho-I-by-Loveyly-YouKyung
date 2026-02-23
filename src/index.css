@@ -376,6 +376,36 @@
   100% { transform: translateZ(0) scale(1) rotateX(0deg); opacity: 1; }
 }
 
+/* Moon float */
+.moon-3d {
+  animation: moonFloat 5s ease-in-out infinite;
+}
+
+@keyframes moonFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+/* Shooting stars (night) */
+.shooting-star {
+  position: absolute;
+  width: 80px;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.8), transparent);
+  border-radius: 2px;
+  pointer-events: none;
+  opacity: 0;
+  animation: shootingStar 3s ease-out infinite;
+}
+
+@keyframes shootingStar {
+  0% { opacity: 0; transform: translateX(0) translateY(0) rotate(-30deg); }
+  5% { opacity: 1; }
+  20% { opacity: 0.8; }
+  40% { opacity: 0; transform: translateX(200px) translateY(120px) rotate(-30deg); }
+  100% { opacity: 0; transform: translateX(200px) translateY(120px) rotate(-30deg); }
+}
+
 /* Mobile responsive styles */
 @media (max-width: 768px) {
   /* Sidebar overlay on mobile */

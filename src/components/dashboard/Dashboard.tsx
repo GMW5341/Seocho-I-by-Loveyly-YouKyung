@@ -202,6 +202,13 @@ export default function Dashboard() {
 
   return (
     <div className="p-3 md:p-6">
+      {/* Featured Quote Banner */}
+      <div className="mb-4 md:mb-6 bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 rounded-xl border border-indigo-100 px-5 py-4">
+        <p className="text-sm md:text-base text-gray-700 leading-relaxed text-center italic">
+          &ldquo;소중한 순간을 넋 놓고 바라보는 것. 그것에서 아름다움을 느낄 수 있도록 하는 것. 그것이 예술이 가지는 힘입니다.&rdquo;
+        </p>
+      </div>
+
       <div className="mb-4 md:mb-6">
         <h3 className="text-lg font-bold text-gray-800">대시보드</h3>
         <p className="text-sm text-gray-500">{format(new Date(), 'yyyy년 MM월 dd일 EEEE', { locale: ko })}</p>
