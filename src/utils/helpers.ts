@@ -181,23 +181,32 @@ export function calculateLastClassDate(
   let sessionsCount = 0;
   const start = parseISO(startDate);
   const currentDate = new Date(start);
+  // Only count attendance records from startDate onwards
+  const relevantAttendance = attendanceRecords.filter(r => r.date >= startDate);
 
   const maxDays = 365;
-  for (let i = 0; i < maxDays; i++) {
-    currentDate.setDate(currentDate.getDate() + 1);
+  for (let i = 0; i <= maxDays; i++) {
+    if (i > 0) {
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
     const dateStr = format(currentDate, 'yyyy-MM-dd');
     const dayOfWeek = getDayOfWeekFromDate(dateStr);
     const isHoliday = holidays.includes(dateStr);
     const isRegularDay = dayOfWeek && regularDays.includes(dayOfWeek);
-    const record = attendanceRecords.find(r => r.date === dateStr);
+    const record = relevantAttendance.find(r => r.date === dateStr);
 
     let shouldCount = false;
 
     if (record && (record.status === '출석' || record.status === '보강')) {
-      shouldCount = true;
+      // Count actual attendance (only on regular days or makeup on any day)
+      if (isRegularDay || record.status === '보강') {
+        shouldCount = true;
+      }
     } else if (!record && isRegularDay && !isHoliday) {
+      // Predict future regular days
       shouldCount = true;
     }
+    // 결석 record on a regular day → don't count (will be made up separately)
 
     if (shouldCount) {
       sessionsCount++;

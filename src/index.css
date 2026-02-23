@@ -47,57 +47,178 @@
 }
 
 /* =============================================
-   Amusement Park Loading Overlay
+   3D Amusement Park Loading Overlay
    ============================================= */
-.park-loader {
-  background: linear-gradient(180deg, #87CEEB 0%, #B0E0FF 40%, #90EE90 40%, #4CAF50 100%);
+.park-loader-3d {
+  background: linear-gradient(180deg,
+    #1a1a2e 0%,
+    #16213e 15%,
+    #0f3460 30%,
+    #533483 50%,
+    #e94560 70%,
+    #f38181 85%,
+    #fce38a 100%
+  );
   overflow: hidden;
   cursor: pointer;
   user-select: none;
+  transform-style: preserve-3d;
 }
 
-/* Clouds */
-@keyframes cloudFloat {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(calc(100vw + 100%)); }
-}
-
-.cloud {
+/* Animated star particles */
+.stars-bg {
   position: absolute;
-  background: white;
-  border-radius: 50px;
-  opacity: 0.9;
-  filter: blur(0.5px);
+  inset: 0;
+  background:
+    radial-gradient(1.5px 1.5px at 20% 15%, rgba(255,255,255,0.8) 50%, transparent 100%),
+    radial-gradient(1px 1px at 40% 25%, rgba(255,255,255,0.6) 50%, transparent 100%),
+    radial-gradient(2px 2px at 60% 10%, rgba(255,255,255,0.9) 50%, transparent 100%),
+    radial-gradient(1px 1px at 80% 20%, rgba(255,255,255,0.5) 50%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 15% 30%, rgba(255,255,255,0.7) 50%, transparent 100%),
+    radial-gradient(1px 1px at 90% 5%, rgba(255,255,255,0.6) 50%, transparent 100%),
+    radial-gradient(2px 2px at 35% 8%, rgba(255,255,255,0.4) 50%, transparent 100%),
+    radial-gradient(1px 1px at 70% 18%, rgba(255,255,255,0.5) 50%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 50% 35%, rgba(255,255,255,0.6) 50%, transparent 100%),
+    radial-gradient(1px 1px at 25% 5%, rgba(255,255,255,0.7) 50%, transparent 100%);
+  animation: twinkle 3s ease-in-out infinite alternate;
 }
 
-.cloud::before,
-.cloud::after {
+@keyframes twinkle {
+  0% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+/* 3D Sun */
+.sun-3d {
+  animation: sunFloat3d 4s ease-in-out infinite;
+}
+
+@keyframes sunFloat3d {
+  0%, 100% { transform: translateY(0) translateZ(30px); }
+  50% { transform: translateY(-8px) translateZ(50px); }
+}
+
+.sun-glow {
+  position: absolute;
+  inset: -20px;
+  background: radial-gradient(circle, rgba(255,220,100,0.6) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: sunPulse 2s ease-in-out infinite;
+}
+
+@keyframes sunPulse {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.2); opacity: 0.8; }
+}
+
+.sun-rays-3d {
+  position: absolute;
+  inset: -12px;
+  animation: sunRays3d 15s linear infinite;
+}
+
+@keyframes sunRays3d {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.sun-ray {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 24px;
+  background: linear-gradient(to top, rgba(255,220,100,0.8), transparent);
+  border-radius: 2px;
+  transform-origin: center bottom;
+  margin-left: -1px;
+  margin-top: -24px;
+}
+
+.sun-face {
+  position: relative;
+  z-index: 1;
+  animation: sunBobble 3s ease-in-out infinite;
+}
+
+@keyframes sunBobble {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+/* 3D Clouds with depth & shadow */
+@keyframes cloudFloat3d {
+  0% { transform: translateX(-120%) translateZ(var(--cloud-z, 0px)); }
+  100% { transform: translateX(calc(100vw + 120%)) translateZ(var(--cloud-z, 0px)); }
+}
+
+.cloud-3d {
+  position: absolute;
+  background: linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(220,230,255,0.8) 100%);
+  border-radius: 50px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.1), inset 0 -4px 8px rgba(0,0,0,0.05);
+}
+
+.cloud-3d::before,
+.cloud-3d::after {
   content: '';
   position: absolute;
-  background: white;
+  background: linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(220,230,255,0.85) 100%);
   border-radius: 50%;
 }
 
-.cloud-1 {
-  width: 120px; height: 40px; top: 8%;
-  animation: cloudFloat 18s linear infinite;
+.cloud-3d-1 {
+  --cloud-z: 50px;
+  width: 140px; height: 45px; top: 8%;
+  animation: cloudFloat3d 20s linear infinite;
 }
-.cloud-1::before { width: 50px; height: 50px; top: -25px; left: 20px; }
-.cloud-1::after { width: 70px; height: 55px; top: -30px; left: 50px; }
+.cloud-3d-1::before { width: 55px; height: 55px; top: -28px; left: 22px; }
+.cloud-3d-1::after { width: 75px; height: 60px; top: -32px; left: 55px; }
 
-.cloud-2 {
-  width: 90px; height: 30px; top: 15%;
-  animation: cloudFloat 24s linear infinite 6s;
+.cloud-3d-2 {
+  --cloud-z: -30px;
+  width: 100px; height: 32px; top: 16%;
+  opacity: 0.7;
+  animation: cloudFloat3d 26s linear infinite 7s;
 }
-.cloud-2::before { width: 40px; height: 40px; top: -20px; left: 15px; }
-.cloud-2::after { width: 55px; height: 45px; top: -25px; left: 35px; }
+.cloud-3d-2::before { width: 42px; height: 42px; top: -22px; left: 16px; }
+.cloud-3d-2::after { width: 58px; height: 48px; top: -26px; left: 38px; }
 
-.cloud-3 {
-  width: 100px; height: 35px; top: 5%;
-  animation: cloudFloat 21s linear infinite 12s;
+.cloud-3d-3 {
+  --cloud-z: 20px;
+  width: 110px; height: 38px; top: 5%;
+  animation: cloudFloat3d 23s linear infinite 13s;
 }
-.cloud-3::before { width: 45px; height: 45px; top: -22px; left: 18px; }
-.cloud-3::after { width: 60px; height: 50px; top: -28px; left: 42px; }
+.cloud-3d-3::before { width: 48px; height: 48px; top: -25px; left: 20px; }
+.cloud-3d-3::after { width: 64px; height: 52px; top: -30px; left: 45px; }
+
+/* Floating 3D items */
+@keyframes float3dItem {
+  0% { transform: translateY(0) translateZ(0) rotateY(0deg) scale(1); opacity: 0.2; }
+  25% { transform: translateY(-30px) translateZ(40px) rotateY(90deg) scale(1.1); opacity: 0.5; }
+  50% { transform: translateY(-50px) translateZ(60px) rotateY(180deg) scale(1.2); opacity: 0.35; }
+  75% { transform: translateY(-30px) translateZ(40px) rotateY(270deg) scale(1.1); opacity: 0.5; }
+  100% { transform: translateY(0) translateZ(0) rotateY(360deg) scale(1); opacity: 0.2; }
+}
+
+.float-3d-item {
+  position: absolute;
+  font-size: 1.25rem;
+  pointer-events: none;
+  animation: float3dItem 6s ease-in-out infinite;
+  filter: blur(0.5px);
+}
+
+/* 3D Ferris Wheel container */
+.ferris-container-3d {
+  animation: ferrisFloat 4s ease-in-out infinite;
+  filter: drop-shadow(0 12px 24px rgba(0,0,0,0.3));
+}
+
+@keyframes ferrisFloat {
+  0%, 100% { transform: translateY(0) rotateX(2deg); }
+  50% { transform: translateY(-6px) rotateX(-2deg); }
+}
 
 /* Ferris Wheel */
 @keyframes ferrisWheel {
@@ -106,58 +227,88 @@
 }
 
 .ferris-wheel {
-  animation: ferrisWheel 8s linear infinite;
+  animation: ferrisWheel 10s linear infinite;
   transform-origin: center;
 }
 
 /* Bouncing elements */
 @keyframes bounce1 {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-15px); }
+  0%, 100% { transform: translateY(0) translateZ(0); }
+  50% { transform: translateY(-15px) translateZ(20px); }
 }
 
 @keyframes bounce2 {
-  0%, 100% { transform: translateY(0) rotate(-5deg); }
-  50% { transform: translateY(-12px) rotate(5deg); }
+  0%, 100% { transform: translateY(0) rotate(-5deg) translateZ(0); }
+  50% { transform: translateY(-12px) rotate(5deg) translateZ(15px); }
 }
 
 @keyframes bounce3 {
-  0%, 100% { transform: translateY(0) scale(1); }
-  50% { transform: translateY(-18px) scale(1.1); }
+  0%, 100% { transform: translateY(0) scale(1) translateZ(0); }
+  50% { transform: translateY(-18px) scale(1.1) translateZ(25px); }
 }
 
 .bounce-1 { animation: bounce1 2s ease-in-out infinite; }
 .bounce-2 { animation: bounce2 2.5s ease-in-out infinite 0.3s; }
 .bounce-3 { animation: bounce3 1.8s ease-in-out infinite 0.6s; }
 
-/* Stars/sparkles */
-@keyframes sparkle {
-  0%, 100% { opacity: 0; transform: scale(0) rotate(0deg); }
-  50% { opacity: 1; transform: scale(1) rotate(180deg); }
+/* 3D Sparkles */
+@keyframes sparkle3d {
+  0% { opacity: 0; transform: scale(0) rotate(0deg) translateZ(0); }
+  40% { opacity: 1; transform: scale(1.3) rotate(180deg) translateZ(80px); }
+  100% { opacity: 0; transform: scale(0.5) rotate(360deg) translateZ(150px); }
 }
 
-.sparkle {
+.sparkle-3d {
   position: absolute;
   pointer-events: none;
-  animation: sparkle 0.6s ease-out forwards;
+  animation: sparkle3d 0.9s ease-out forwards;
+  filter: drop-shadow(0 0 6px rgba(255,255,255,0.5));
 }
 
-/* Balloon float */
-@keyframes balloonFloat {
-  0% { transform: translateY(100vh) scale(0.5); opacity: 0; }
-  10% { opacity: 1; }
-  90% { opacity: 0.8; }
-  100% { transform: translateY(-120px) scale(1); opacity: 0; }
+/* 3D Balloons */
+@keyframes balloonFloat3d {
+  0% { transform: translateY(100vh) scale(0.4) translateZ(var(--balloon-z, 0px)); opacity: 0; }
+  8% { opacity: 1; }
+  50% { transform: translateY(0) scale(1) translateZ(calc(var(--balloon-z, 0px) + 30px)); }
+  85% { opacity: 0.7; }
+  100% { transform: translateY(-150px) scale(1.05) translateZ(var(--balloon-z, 0px)); opacity: 0; }
 }
 
-.balloon {
+.balloon-3d {
   position: absolute;
-  animation: balloonFloat 4s ease-out forwards;
+  animation: balloonFloat3d 5s ease-out forwards;
   pointer-events: none;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.15));
 }
 
-/* Loading bar */
-@keyframes loadingBar {
+/* 3D Title effect */
+.title-3d {
+  animation: titlePulse 3s ease-in-out infinite;
+}
+
+@keyframes titlePulse {
+  0%, 100% { transform: translateZ(0) scale(1); }
+  50% { transform: translateZ(20px) scale(1.02); }
+}
+
+.title-text-3d {
+  background: linear-gradient(180deg, #ffffff 0%, #e0e7ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 3D Loading bar */
+.loading-bar-3d {
+  animation: barFloat 3s ease-in-out infinite;
+}
+
+@keyframes barFloat {
+  0%, 100% { transform: translateZ(0) perspective(500px) rotateX(0deg); }
+  50% { transform: translateZ(10px) perspective(500px) rotateX(2deg); }
+}
+
+@keyframes loadingBar3d {
   0% { width: 0%; }
   20% { width: 25%; }
   50% { width: 55%; }
@@ -165,16 +316,42 @@
   100% { width: 100%; }
 }
 
-.loading-bar-fill {
-  animation: loadingBar 3s ease-out forwards;
-  background: linear-gradient(90deg, #FF6B6B, #FFE66D, #4ECDC4, #45B7D1, #96CEB4);
-  background-size: 200% 100%;
-  animation: loadingBar 3s ease-out forwards, loadingBarShimmer 1.5s ease-in-out infinite;
+.loading-bar-fill-3d {
+  background: linear-gradient(90deg, #FF6B6B, #FFE66D, #4ECDC4, #45B7D1, #96CEB4, #FF9FF3);
+  background-size: 300% 100%;
+  animation: loadingBar3d 3s ease-out forwards, loadingBarShimmer3d 2s ease-in-out infinite;
+  box-shadow: 0 0 12px rgba(78, 205, 196, 0.5), 0 0 24px rgba(69, 183, 209, 0.3);
 }
 
-@keyframes loadingBarShimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+@keyframes loadingBarShimmer3d {
+  0% { background-position: 300% 0; }
+  100% { background-position: -300% 0; }
+}
+
+/* 3D Characters */
+.char-3d {
+  transform-style: preserve-3d;
+  transition: transform 0.3s ease;
+}
+
+.char-3d:hover {
+  transform: translateY(-10px) translateZ(30px) scale(1.3) !important;
+}
+
+/* 3D Ground */
+.ground-3d {
+  height: 25%;
+  transform-style: preserve-3d;
+}
+
+/* 3D Flag */
+.flag-3d {
+  animation: flagBob 2s ease-in-out infinite;
+}
+
+@keyframes flagBob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
 }
 
 /* Flag wave */
@@ -188,23 +365,15 @@
   transform-origin: bottom center;
 }
 
-/* Sun rays */
-@keyframes sunRays {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+/* Scene 3D container */
+.scene-3d {
+  transform-style: preserve-3d;
+  animation: sceneEntry 0.8s ease-out;
 }
 
-.sun-rays {
-  animation: sunRays 20s linear infinite;
-}
-
-/* Roller coaster cart */
-@keyframes coasterRide {
-  0% { transform: translateX(-100px) translateY(0); }
-  25% { transform: translateX(0px) translateY(-20px); }
-  50% { transform: translateX(100px) translateY(10px); }
-  75% { transform: translateX(200px) translateY(-15px); }
-  100% { transform: translateX(300px) translateY(0); }
+@keyframes sceneEntry {
+  0% { transform: translateZ(-200px) scale(0.8) rotateX(10deg); opacity: 0; }
+  100% { transform: translateZ(0) scale(1) rotateX(0deg); opacity: 1; }
 }
 
 /* Mobile responsive styles */

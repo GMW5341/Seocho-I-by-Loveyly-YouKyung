@@ -237,6 +237,8 @@ export function useStore() {
           setPayments(p => {
             const activePayment = p.find(pay =>
               pay.studentId === existing.studentId && !pay.completed
+            ) || p.find(pay =>
+              pay.studentId === existing.studentId && pay.completed && pay.remainingSessions === 0
             );
             if (activePayment) {
               const newRemaining = Math.min(activePayment.remainingSessions + 1, activePayment.totalSessions);

@@ -19,132 +19,193 @@ import {
 } from './services/firebaseSync';
 
 // ============================================================
-// Amusement Park Interactive Loading Screen
+// 3D Amusement Park Interactive Loading Screen
 // ============================================================
 const BALLOON_COLORS = ['#FF6B6B', '#FFE66D', '#4ECDC4', '#45B7D1', '#96CEB4', '#FF9FF3', '#F8B500', '#6C5CE7'];
 const EMOJI_ITEMS = ['🎡', '🎢', '🎠', '🎪', '🎨', '🖌️', '🌈', '⭐', '🎵', '🎶', '🦋', '🌸'];
+const FLOAT_ITEMS = ['🎨', '🖌️', '🌈', '⭐', '🎵', '🦋', '🌸', '✨', '💫', '🎭'];
 
 function AmusementParkLoader({ status }: { status: string }) {
-  const [sparkles, setSparkles] = useState<Array<{ id: number; x: number; y: number; emoji: string }>>([]);
-  const [balloons, setBalloons] = useState<Array<{ id: number; x: number; color: string }>>([]);
+  const [sparkles, setSparkles] = useState<Array<{ id: number; x: number; y: number; emoji: string; z: number }>>([]);
+  const [balloons, setBalloons] = useState<Array<{ id: number; x: number; color: string; z: number }>>([]);
+  const [floatingItems, setFloatingItems] = useState<Array<{ id: number; x: number; y: number; emoji: string; delay: number; speed: number }>>([]);
   const sparkleIdRef = useRef(0);
   const balloonIdRef = useRef(0);
 
-  // Click/tap → sparkle burst
+  // Initialize floating 3D items
+  useEffect(() => {
+    const items = Array.from({ length: 15 }, (_, i) => ({
+      id: i,
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+      emoji: FLOAT_ITEMS[i % FLOAT_ITEMS.length],
+      delay: Math.random() * 5,
+      speed: 3 + Math.random() * 4,
+    }));
+    setFloatingItems(items);
+  }, []);
+
+  // Click/tap → 3D sparkle burst
   const handleClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
     const x = clientX - rect.left;
     const y = clientY - rect.top;
-    const newSparkles = Array.from({ length: 5 }, () => ({
+    const newSparkles = Array.from({ length: 8 }, () => ({
       id: sparkleIdRef.current++,
-      x: x + (Math.random() - 0.5) * 60,
-      y: y + (Math.random() - 0.5) * 60,
+      x: x + (Math.random() - 0.5) * 100,
+      y: y + (Math.random() - 0.5) * 100,
+      z: Math.random() * 200 - 100,
       emoji: EMOJI_ITEMS[Math.floor(Math.random() * EMOJI_ITEMS.length)],
     }));
     setSparkles(prev => [...prev, ...newSparkles]);
     setTimeout(() => {
       setSparkles(prev => prev.filter(s => !newSparkles.find(ns => ns.id === s.id)));
-    }, 700);
+    }, 1000);
   }, []);
 
-  // Auto-release balloons
+  // Auto-release balloons with 3D depth
   useEffect(() => {
     const interval = setInterval(() => {
       const newBalloon = {
         id: balloonIdRef.current++,
         x: 10 + Math.random() * 80,
         color: BALLOON_COLORS[Math.floor(Math.random() * BALLOON_COLORS.length)],
+        z: Math.random() * 100 - 50,
       };
-      setBalloons(prev => [...prev.slice(-6), newBalloon]);
+      setBalloons(prev => [...prev.slice(-7), newBalloon]);
       setTimeout(() => {
         setBalloons(prev => prev.filter(b => b.id !== newBalloon.id));
-      }, 4200);
-    }, 1800);
+      }, 5000);
+    }, 1500);
     return () => clearInterval(interval);
   }, []);
 
   return (
     <div
-      className="park-loader fixed inset-0 flex flex-col items-center justify-center min-h-screen z-[9999]"
+      className="park-loader-3d fixed inset-0 flex flex-col items-center justify-center min-h-screen z-[9999]"
       onClick={handleClick}
+      style={{ perspective: '1200px' }}
     >
-      {/* Sun */}
-      <div className="absolute top-6 right-8 md:top-10 md:right-16">
+      {/* Animated stars background */}
+      <div className="stars-bg" />
+
+      {/* 3D Sun with glow */}
+      <div className="absolute top-6 right-8 md:top-10 md:right-16 sun-3d">
         <div className="relative">
-          <div className="sun-rays absolute -inset-6 opacity-30">
-            {Array.from({ length: 8 }).map((_, i) => (
+          <div className="sun-glow" />
+          <div className="sun-rays-3d">
+            {Array.from({ length: 12 }).map((_, i) => (
               <div
                 key={i}
-                className="absolute left-1/2 top-1/2 w-1 bg-yellow-300 rounded-full"
-                style={{
-                  height: 28,
-                  transform: `translate(-50%, -50%) rotate(${i * 45}deg) translateY(-22px)`,
-                }}
+                className="sun-ray"
+                style={{ transform: `rotate(${i * 30}deg)` }}
               />
             ))}
           </div>
-          <div className="w-14 h-14 rounded-full bg-yellow-300 shadow-lg shadow-yellow-300/50 flex items-center justify-center text-2xl">
+          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-yellow-200 via-yellow-300 to-orange-400 shadow-lg flex items-center justify-center text-2xl sun-face">
             😊
           </div>
         </div>
       </div>
 
-      {/* Clouds */}
-      <div className="cloud cloud-1" />
-      <div className="cloud cloud-2" />
-      <div className="cloud cloud-3" />
+      {/* 3D Clouds with depth */}
+      <div className="cloud-3d cloud-3d-1" style={{ transform: 'translateZ(50px)' }} />
+      <div className="cloud-3d cloud-3d-2" style={{ transform: 'translateZ(-30px)' }} />
+      <div className="cloud-3d cloud-3d-3" style={{ transform: 'translateZ(20px)' }} />
 
-      {/* Balloons */}
+      {/* Floating 3D emoji particles */}
+      {floatingItems.map(item => (
+        <div
+          key={item.id}
+          className="float-3d-item"
+          style={{
+            left: `${item.x}%`,
+            top: `${item.y}%`,
+            animationDelay: `${item.delay}s`,
+            animationDuration: `${item.speed}s`,
+          }}
+        >
+          {item.emoji}
+        </div>
+      ))}
+
+      {/* 3D Balloons */}
       {balloons.map(b => (
         <div
           key={b.id}
-          className="balloon"
-          style={{ left: `${b.x}%`, bottom: 0 }}
+          className="balloon-3d"
+          style={{
+            left: `${b.x}%`,
+            bottom: 0,
+            transform: `translateZ(${b.z}px)`,
+          }}
         >
-          <svg width="32" height="48" viewBox="0 0 32 48">
-            <ellipse cx="16" cy="16" rx="12" ry="16" fill={b.color} opacity="0.85" />
-            <ellipse cx="16" cy="16" rx="12" ry="16" fill="white" opacity="0.2" />
-            <ellipse cx="12" cy="10" rx="3" ry="5" fill="white" opacity="0.3" transform="rotate(-20 12 10)" />
-            <path d="M16 32 L16 48" stroke={b.color} strokeWidth="1" opacity="0.6" />
-            <polygon points="14,32 18,32 16,35" fill={b.color} opacity="0.7" />
+          <svg width="36" height="52" viewBox="0 0 36 52">
+            <defs>
+              <radialGradient id={`bg-${b.id}`} cx="35%" cy="30%">
+                <stop offset="0%" stopColor="white" stopOpacity="0.5" />
+                <stop offset="100%" stopColor={b.color} stopOpacity="0.9" />
+              </radialGradient>
+            </defs>
+            <ellipse cx="18" cy="18" rx="14" ry="18" fill={`url(#bg-${b.id})`} />
+            <ellipse cx="13" cy="11" rx="4" ry="6" fill="white" opacity="0.35" transform="rotate(-15 13 11)" />
+            <path d="M18 36 L18 52" stroke={b.color} strokeWidth="1" opacity="0.5" />
+            <polygon points="16,36 20,36 18,39" fill={b.color} opacity="0.6" />
           </svg>
         </div>
       ))}
 
-      {/* Sparkle effects on click */}
+      {/* 3D Sparkle effects on click */}
       {sparkles.map(s => (
-        <div key={s.id} className="sparkle text-2xl" style={{ left: s.x, top: s.y }}>
+        <div
+          key={s.id}
+          className="sparkle-3d text-2xl md:text-3xl"
+          style={{
+            left: s.x,
+            top: s.y,
+            transform: `translateZ(${s.z}px) scale(${0.5 + Math.random()})`,
+          }}
+        >
           {s.emoji}
         </div>
       ))}
 
-      {/* Central content */}
-      <div className="relative z-10 flex flex-col items-center gap-6 px-4">
-        {/* Ferris Wheel SVG */}
-        <div className="relative w-32 h-32 md:w-40 md:h-40">
-          <svg viewBox="0 0 120 120" className="w-full h-full">
-            {/* Center hub */}
-            <circle cx="60" cy="55" r="4" fill="#6366f1" />
+      {/* Central 3D content */}
+      <div className="relative z-10 flex flex-col items-center gap-6 px-4 scene-3d">
+        {/* 3D Ferris Wheel */}
+        <div className="relative w-36 h-36 md:w-44 md:h-44 ferris-container-3d">
+          <svg viewBox="0 0 120 120" className="w-full h-full drop-shadow-xl">
+            {/* Base platform */}
+            <rect x="30" y="93" width="60" height="4" rx="2" fill="#8B7355" opacity="0.8" />
             {/* Support legs */}
-            <line x1="60" y1="55" x2="40" y2="95" stroke="#8B7355" strokeWidth="3" strokeLinecap="round" />
-            <line x1="60" y1="55" x2="80" y2="95" stroke="#8B7355" strokeWidth="3" strokeLinecap="round" />
-            <line x1="35" y1="95" x2="85" y2="95" stroke="#8B7355" strokeWidth="4" strokeLinecap="round" />
+            <line x1="60" y1="55" x2="38" y2="93" stroke="#8B7355" strokeWidth="3.5" strokeLinecap="round" />
+            <line x1="60" y1="55" x2="82" y2="93" stroke="#8B7355" strokeWidth="3.5" strokeLinecap="round" />
+            {/* Center hub with glow */}
+            <circle cx="60" cy="55" r="6" fill="#818cf8" />
+            <circle cx="60" cy="55" r="4" fill="#6366f1" />
+            <circle cx="59" cy="54" r="2" fill="white" opacity="0.4" />
             {/* Rotating wheel */}
             <g className="ferris-wheel" style={{ transformOrigin: '60px 55px' }}>
+              <circle cx="60" cy="55" r="34" fill="none" stroke="#a5b4fc" strokeWidth="1" />
               <circle cx="60" cy="55" r="32" fill="none" stroke="#6366f1" strokeWidth="2.5" />
-              {/* Spokes + gondolas */}
-              {Array.from({ length: 6 }).map((_, i) => {
-                const angle = (i * 60 - 90) * (Math.PI / 180);
+              <circle cx="60" cy="55" r="16" fill="none" stroke="#6366f1" strokeWidth="1" opacity="0.3" />
+              {/* Spokes + 3D gondolas */}
+              {Array.from({ length: 8 }).map((_, i) => {
+                const angle = (i * 45 - 90) * (Math.PI / 180);
                 const x = 60 + 32 * Math.cos(angle);
                 const y = 55 + 32 * Math.sin(angle);
-                const colors = ['#FF6B6B', '#FFE66D', '#4ECDC4', '#45B7D1', '#96CEB4', '#FF9FF3'];
+                const colors = ['#FF6B6B', '#FFE66D', '#4ECDC4', '#45B7D1', '#96CEB4', '#FF9FF3', '#F8B500', '#6C5CE7'];
                 return (
                   <g key={i}>
-                    <line x1="60" y1="55" x2={x} y2={y} stroke="#6366f1" strokeWidth="1" opacity="0.5" />
-                    <rect x={x - 5} y={y - 2} width="10" height="8" rx="2" fill={colors[i]} stroke={colors[i]} strokeWidth="0.5" />
-                    <rect x={x - 5} y={y - 2} width="10" height="3" rx="1" fill="white" opacity="0.3" />
+                    <line x1="60" y1="55" x2={x} y2={y} stroke="#818cf8" strokeWidth="1" opacity="0.4" />
+                    {/* Gondola body */}
+                    <rect x={x - 5.5} y={y - 1} width="11" height="9" rx="2.5" fill={colors[i]} />
+                    {/* Gondola highlight */}
+                    <rect x={x - 5.5} y={y - 1} width="11" height="3.5" rx="2" fill="white" opacity="0.25" />
+                    {/* Gondola hanger */}
+                    <line x1={x} y1={y - 3} x2={x} y2={y - 1} stroke={colors[i]} strokeWidth="1.5" />
                   </g>
                 );
               })}
@@ -152,48 +213,63 @@ function AmusementParkLoader({ status }: { status: string }) {
           </svg>
         </div>
 
-        {/* Title */}
-        <div className="text-center">
+        {/* 3D Title with depth */}
+        <div className="text-center title-3d">
           <div className="flex items-center justify-center gap-3 mb-2">
-            <span className="bounce-1 text-3xl">🎨</span>
-            <h1 className="text-2xl md:text-3xl font-bold text-white drop-shadow-md" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
+            <span className="bounce-1 text-3xl md:text-4xl" style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.2))' }}>🎨</span>
+            <h1
+              className="text-3xl md:text-4xl font-bold text-white title-text-3d"
+              style={{ textShadow: '0 2px 4px rgba(0,0,0,0.1), 0 4px 12px rgba(99,102,241,0.3)' }}
+            >
               서초아이미술
             </h1>
-            <span className="bounce-2 text-3xl">🖌️</span>
+            <span className="bounce-2 text-3xl md:text-4xl" style={{ filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.2))' }}>🖌️</span>
           </div>
-          <p className="text-white/80 text-sm drop-shadow-sm">
+          <p className="text-white/80 text-sm drop-shadow-sm tracking-wide">
             {status || '놀이동산 준비 중...'}
           </p>
         </div>
 
-        {/* Loading bar */}
-        <div className="w-64 md:w-80">
-          <div className="h-3 bg-white/30 rounded-full overflow-hidden backdrop-blur-sm shadow-inner">
-            <div className="loading-bar-fill h-full rounded-full" />
+        {/* 3D Loading bar with depth */}
+        <div className="w-64 md:w-80 loading-bar-3d">
+          <div className="h-4 bg-white/20 rounded-full overflow-hidden backdrop-blur-md shadow-inner border border-white/20">
+            <div className="loading-bar-fill-3d h-full rounded-full" />
           </div>
-          <p className="text-center text-white/60 text-xs mt-2 drop-shadow-sm">화면을 터치하면 불꽃놀이가 터져요!</p>
+          <p className="text-center text-white/60 text-xs mt-2.5 drop-shadow-sm">화면을 터치하면 불꽃놀이가 터져요!</p>
         </div>
 
-        {/* Bouncing characters */}
-        <div className="flex gap-5 mt-2">
-          <span className="bounce-1 text-4xl drop-shadow-md cursor-pointer hover:scale-125 transition-transform">🎡</span>
-          <span className="bounce-2 text-4xl drop-shadow-md cursor-pointer hover:scale-125 transition-transform">🎢</span>
-          <span className="bounce-3 text-4xl drop-shadow-md cursor-pointer hover:scale-125 transition-transform">🎠</span>
-          <span className="bounce-1 text-4xl drop-shadow-md cursor-pointer hover:scale-125 transition-transform" style={{ animationDelay: '0.9s' }}>🎪</span>
+        {/* 3D Bouncing characters */}
+        <div className="flex gap-6 mt-2">
+          {['🎡', '🎢', '🎠', '🎪'].map((emoji, i) => (
+            <span
+              key={i}
+              className={`bounce-${(i % 3) + 1} text-4xl md:text-5xl cursor-pointer hover:scale-125 transition-transform char-3d`}
+              style={{
+                animationDelay: `${i * 0.3}s`,
+                filter: 'drop-shadow(0 6px 8px rgba(0,0,0,0.25))',
+              }}
+            >
+              {emoji}
+            </span>
+          ))}
         </div>
       </div>
 
-      {/* Ground decorations */}
-      <div className="absolute bottom-0 left-0 right-0 h-[40%] pointer-events-none">
-        {/* Grass */}
-        <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-green-700 to-transparent opacity-30" />
-        {/* Fence */}
-        <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-4">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="flex flex-col items-center">
-              <div className="w-1 h-5 bg-amber-800/40 rounded-t" />
-              <div className="flag-wave text-base" style={{ animationDelay: `${i * 0.15}s` }}>
-                {['🚩', '🏁', '🎌', '🚩'][i % 4]}
+      {/* 3D Ground with perspective */}
+      <div className="absolute bottom-0 left-0 right-0 ground-3d pointer-events-none">
+        {/* Rolling hills */}
+        <svg className="absolute bottom-0 w-full" viewBox="0 0 1200 120" preserveAspectRatio="none" style={{ height: '80px' }}>
+          <path d="M0,80 C200,20 400,100 600,50 C800,0 1000,60 1200,30 L1200,120 L0,120 Z" fill="#4ade80" opacity="0.4" />
+          <path d="M0,90 C300,40 500,110 700,60 C900,10 1100,80 1200,50 L1200,120 L0,120 Z" fill="#22c55e" opacity="0.5" />
+          <path d="M0,100 C150,80 350,105 600,85 C850,65 1050,100 1200,80 L1200,120 L0,120 Z" fill="#16a34a" opacity="0.6" />
+        </svg>
+        {/* Flags with 3D perspective */}
+        <div className="absolute bottom-8 left-0 right-0 flex justify-center gap-5">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <div key={i} className="flex flex-col items-center flag-3d" style={{ animationDelay: `${i * 0.1}s` }}>
+              <div className="w-1 h-6 bg-amber-800/50 rounded-t" />
+              <div className="flag-wave text-lg" style={{ animationDelay: `${i * 0.15}s` }}>
+                {['🚩', '🏁', '🎌', '🎏', '🚩'][i % 5]}
               </div>
             </div>
           ))}

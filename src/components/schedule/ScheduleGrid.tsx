@@ -15,10 +15,13 @@ import {
   timeToMinutes,
   minutesToTime,
   layoutSlotsForDay,
+  formatCurrency,
 } from '../../utils/helpers';
 import Modal from '../common/Modal';
 import MakeupForm from './MakeupForm';
 import TrialForm from './TrialForm';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 
 const PX_PER_MINUTE_WEEK = 2.5;
 const PX_PER_MINUTE_DAY = 4;
@@ -54,6 +57,7 @@ export default function ScheduleGrid() {
     moveSchedule, updateSchedule, removeSchedule, restoreSchedule, addSchedule,
     addTrialStudent, addTrialLesson,
     addAttendance, updateAttendance, deleteAttendance,
+    addPayment, updateStudent,
     specialClasses, specialClassStudents,
   } = useAppStore();
   const [showMakeupForm, setShowMakeupForm] = useState(false);
@@ -64,8 +68,10 @@ export default function ScheduleGrid() {
   const [deletedSlot, setDeletedSlot] = useState<ScheduleSlot | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDay, setSelectedDay] = useState<DayOfWeek | null>(null);
+  const [isPdfExporting, setIsPdfExporting] = useState(false);
   const PX_PER_MINUTE = selectedDay ? PX_PER_MINUTE_DAY : PX_PER_MINUTE_WEEK;
   const dayColumnRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const scheduleGridRef = useRef<HTMLDivElement>(null);
   const dragOffsetRef = useRef(0);
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -152,6 +158,57 @@ export default function ScheduleGrid() {
       });
     }
   };
+
+  // PDF Export function for day view
+  const handleExportPdf = useCallback(async () => {
+    if (!scheduleGridRef.current || !selectedDay) return;
+    setIsPdfExporting(true);
+
+    try {
+      // Small delay to ensure state is applied
+      await new Promise(r => setTimeout(r, 100));
+
+      const element = scheduleGridRef.current;
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+
+      // Determine orientation based on aspect ratio
+      const isLandscape = imgWidth > imgHeight;
+      const pdf = new jsPDF({
+        orientation: isLandscape ? 'landscape' : 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 10;
+      const availableWidth = pageWidth - margin * 2;
+      const availableHeight = pageHeight - margin * 2;
+
+      const ratio = Math.min(availableWidth / imgWidth, availableHeight / imgHeight);
+      const finalWidth = imgWidth * ratio;
+      const finalHeight = imgHeight * ratio;
+      const xOffset = (pageWidth - finalWidth) / 2;
+
+      pdf.addImage(imgData, 'PNG', xOffset, margin, finalWidth, finalHeight);
+
+      const dateStr = getDateForDay(selectedDay);
+      pdf.save(`스케줄_${selectedDay}요일_${dateStr}.pdf`);
+    } catch (err) {
+      console.error('PDF export failed:', err);
+    } finally {
+      setIsPdfExporting(false);
+    }
+  }, [selectedDay]);
 
   // Compute unified time range across all days
   const timeRange = useMemo(() => {
@@ -557,8 +614,71 @@ export default function ScheduleGrid() {
     setMemoSlot(null);
   };
 
+  // Unpaid students with past payment data (for renewal feature)
+  const unpaidStudentData = useMemo(() => {
+    return activeStudents
+      .filter(s => unpaidStudentIds.has(s.id))
+      .map(student => {
+        const lastCompleted = payments
+          .filter(p => p.studentId === student.id && p.completed)
+          .sort((a, b) => b.paidAt.localeCompare(a.paidAt))[0];
+        return { student, lastPayment: lastCompleted };
+      })
+      .filter(d => d.lastPayment);
+  }, [activeStudents, unpaidStudentIds, payments]);
+
+  // Students approaching payment exhaustion (remainingSessions <= 2)
+  const expiringStudents = useMemo(() => {
+    return activeStudents
+      .map(student => {
+        const activePay = payments.find(p => p.studentId === student.id && !p.completed && p.remainingSessions > 0);
+        if (!activePay || activePay.remainingSessions > 2) return null;
+        return { student, payment: activePay };
+      })
+      .filter(Boolean) as Array<{ student: typeof activeStudents[0]; payment: typeof payments[0] }>;
+  }, [activeStudents, payments]);
+
+  const [showUnpaidPanel, setShowUnpaidPanel] = useState(false);
+
   return (
     <div className="p-3 md:p-6">
+      {/* Payment exhaustion alert banner */}
+      {(expiringStudents.length > 0 || unpaidStudentData.length > 0) && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
+          <div className="flex items-start gap-2">
+            <span className="text-lg mt-0.5">&#9888;&#65039;</span>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-bold text-amber-800">결제 알림</h4>
+              {expiringStudents.length > 0 && (
+                <p className="text-xs text-amber-700 mt-1">
+                  <span className="font-semibold">수업 잔여 2회 이하:</span>{' '}
+                  {expiringStudents.map((d, i) => (
+                    <span key={d.student.id}>
+                      {i > 0 && ', '}{d.student.name}
+                      <span className="text-red-600 font-bold">({d.payment.remainingSessions}회)</span>
+                    </span>
+                  ))}
+                </p>
+              )}
+              {unpaidStudentData.length > 0 && (
+                <p className="text-xs text-amber-700 mt-1">
+                  <span className="font-semibold">미결제(수업 소진):</span>{' '}
+                  {unpaidStudentData.map((d, i) => (
+                    <span key={d.student.id}>{i > 0 && ', '}{d.student.name}</span>
+                  ))}
+                  <button
+                    onClick={() => setShowUnpaidPanel(true)}
+                    className="ml-2 text-indigo-600 hover:text-indigo-800 font-semibold underline"
+                  >
+                    과거 결제에서 갱신
+                  </button>
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
         <div>
           <h3 className="text-lg font-bold text-gray-800">주간 스케줄</h3>
@@ -624,7 +744,7 @@ export default function ScheduleGrid() {
 
       {/* Day tabs for detail view */}
       {selectedDay && (
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
           <button
             onClick={() => setSelectedDay(null)}
             className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
@@ -650,15 +770,29 @@ export default function ScheduleGrid() {
               );
             })}
           </div>
+          <button
+            onClick={handleExportPdf}
+            disabled={isPdfExporting}
+            className="ml-auto px-4 py-1.5 rounded-lg text-sm font-medium bg-rose-600 text-white hover:bg-rose-700 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+          >
+            {isPdfExporting ? (
+              <>
+                <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                내보내는 중...
+              </>
+            ) : (
+              <>PDF 저장</>
+            )}
+          </button>
         </div>
       )}
 
       {/* Schedule Grid */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-auto -mx-3 md:mx-0 rounded-none md:rounded-xl border-x-0 md:border-x" style={{ WebkitOverflowScrolling: 'touch' }}>
+      <div ref={scheduleGridRef} className="bg-white rounded-xl border border-gray-200 overflow-auto -mx-3 md:mx-0 rounded-none md:rounded-xl border-x-0 md:border-x" style={{ WebkitOverflowScrolling: 'touch' }}>
         <div className={selectedDay ? '' : 'min-w-[800px]'}>
           {/* Header */}
-          <div className="flex bg-gray-50 border-b border-gray-200">
-            <div className="w-16 shrink-0 px-2 py-2 text-xs font-medium text-gray-500 text-center border-r border-gray-200">
+          <div className={`flex bg-gray-50 border-b border-gray-200 ${selectedDay ? 'py-1' : ''}`}>
+            <div className={`w-16 shrink-0 px-2 py-2 font-medium text-gray-500 text-center border-r border-gray-200 ${selectedDay ? 'text-sm' : 'text-xs'}`}>
               시간
             </div>
             {(selectedDay ? [selectedDay] : DAYS_OF_WEEK).map(day => {
@@ -666,21 +800,24 @@ export default function ScheduleGrid() {
               const dateStr = getDateForDay(day);
               const slotCount = (daySchedules[day] || []).length;
               const holidayName = getHolidayName(dateStr);
+              const isDayView = !!selectedDay;
               return (
                 <div
                   key={day}
                   onClick={() => !selectedDay && hours && setSelectedDay(day)}
-                  className={`flex-1 px-3 py-2 text-sm font-medium text-center border-r border-gray-200 last:border-r-0 ${
+                  className={`flex-1 px-3 font-medium text-center border-r border-gray-200 last:border-r-0 ${
+                    isDayView ? 'py-3 text-lg' : 'py-2 text-sm'
+                  } ${
                     holidayName ? 'bg-red-50 text-red-600' : 'text-gray-700'
                   } ${!selectedDay && hours ? 'cursor-pointer hover:bg-indigo-50 transition-colors' : ''}`}
                 >
                   {day}요일
-                  <span className="block text-[10px] font-normal text-gray-400">{format(new Date(dateStr + 'T00:00:00'), 'M/d')}</span>
+                  <span className={`block font-normal text-gray-400 ${isDayView ? 'text-sm mt-0.5' : 'text-[10px]'}`}>{format(new Date(dateStr + 'T00:00:00'), 'M/d')}</span>
                   {holidayName && (
-                    <span className="block text-[10px] font-semibold text-red-500">{holidayName}</span>
+                    <span className={`block font-semibold text-red-500 ${isDayView ? 'text-sm' : 'text-[10px]'}`}>{holidayName}</span>
                   )}
-                  {!holidayName && hours && <span className="block text-[10px] font-normal text-gray-400">{hours.start}-{hours.end}</span>}
-                  {selectedDay && <span className="block text-[10px] font-medium text-indigo-500 mt-0.5">{slotCount}개 수업</span>}
+                  {!holidayName && hours && <span className={`block font-normal text-gray-400 ${isDayView ? 'text-sm' : 'text-[10px]'}`}>{hours.start}-{hours.end}</span>}
+                  {selectedDay && <span className={`block font-medium text-indigo-500 mt-0.5 ${isDayView ? 'text-sm' : 'text-[10px]'}`}>{slotCount}개 수업</span>}
                 </div>
               );
             })}
@@ -699,8 +836,8 @@ export default function ScheduleGrid() {
                     className="absolute left-0 right-0 px-1.5 -translate-y-1/2 flex items-baseline gap-0.5"
                     style={{ top }}
                   >
-                    <span className="text-[12px] font-semibold text-gray-600 tabular-nums tracking-tight">{h}</span>
-                    <span className="text-[10px] text-gray-400">:{m}</span>
+                    <span className={`font-semibold text-gray-600 tabular-nums tracking-tight ${selectedDay ? 'text-[14px]' : 'text-[12px]'}`}>{h}</span>
+                    <span className={`text-gray-400 ${selectedDay ? 'text-[12px]' : 'text-[10px]'}`}>:{m}</span>
                   </div>
                 );
               })}
@@ -1079,6 +1216,79 @@ export default function ScheduleGrid() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Unpaid Students - Renew from Past Payment */}
+      <Modal isOpen={showUnpaidPanel} onClose={() => setShowUnpaidPanel(false)} title="과거 결제에서 스케줄 갱신" size="lg">
+        <div className="space-y-3">
+          <p className="text-sm text-gray-500">
+            수업 횟수가 소진된 학생입니다. 과거 결제 정보를 기반으로 새 결제를 등록하면 스케줄이 자동으로 활성화됩니다.
+          </p>
+          {unpaidStudentData.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-6">미결제 학생이 없습니다.</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {unpaidStudentData.map(({ student, lastPayment }) => (
+                <div key={student.id} className="py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-gray-900">{student.name}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      {student.level} | {lastPayment.classDuration}분 | {lastPayment.totalSessions}회
+                    </div>
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      마지막 결제: {lastPayment.paidAt.slice(0, 10)} | {formatCurrency(lastPayment.amount)}
+                    </div>
+                    {lastPayment.regularSchedule?.length ? (
+                      <div className="text-xs text-indigo-500 mt-0.5">
+                        스케줄: {lastPayment.regularSchedule.map(e => `${e.day} ${e.startTime}`).join(', ')}
+                      </div>
+                    ) : null}
+                  </div>
+                  <button
+                    onClick={() => {
+                      const today = format(new Date(), 'yyyy-MM-dd');
+                      const newPayment = addPayment({
+                        studentId: student.id,
+                        amount: lastPayment.amount,
+                        originalAmount: lastPayment.originalAmount,
+                        discountRate: lastPayment.discountRate,
+                        extraDiscounts: lastPayment.extraDiscounts,
+                        totalSessions: lastPayment.totalSessions,
+                        method: lastPayment.method,
+                        splitPayments: lastPayment.splitPayments,
+                        startDate: today,
+                        paidAt: today,
+                        classDuration: lastPayment.classDuration,
+                        memo: `${lastPayment.paidAt.slice(0,10)} 결제 갱신`,
+                        sessionsPerWeek: lastPayment.sessionsPerWeek,
+                        regularSchedule: lastPayment.regularSchedule,
+                      });
+                      // Sync schedule to student
+                      if (lastPayment.regularSchedule?.length) {
+                        updateStudent(student.id, {
+                          regularSchedule: lastPayment.regularSchedule as any,
+                          sessionsPerWeek: lastPayment.sessionsPerWeek || lastPayment.regularSchedule.length,
+                          classDuration: lastPayment.classDuration as any,
+                        });
+                      }
+                    }}
+                    className="shrink-0 px-4 py-2 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors whitespace-nowrap"
+                  >
+                    동일 조건 갱신
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="pt-2 border-t border-gray-100">
+            <button
+              onClick={() => setShowUnpaidPanel(false)}
+              className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

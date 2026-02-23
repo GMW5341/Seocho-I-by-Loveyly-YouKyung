@@ -40,7 +40,7 @@ export default function PaymentManager() {
         lastClassDate = calculateLastClassDate(
           activePayment.startDate,
           activePayment.totalSessions,
-          student.regularSchedule || [],
+          activePayment.regularSchedule || student.regularSchedule || [],
           holidayDates,
           studentAttendance
         );
@@ -96,7 +96,7 @@ export default function PaymentManager() {
           lastClassDate = calculateLastClassDate(
             p.startDate,
             p.totalSessions,
-            student.regularSchedule || [],
+            p.regularSchedule || student?.regularSchedule || [],
             holidayDates,
             studentAttendance
           );
