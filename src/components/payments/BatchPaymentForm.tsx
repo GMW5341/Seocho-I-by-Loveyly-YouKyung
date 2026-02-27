@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { format } from 'date-fns';
 import type { Student, Payment, PaymentMethod, ClassDuration, AcademySettings, SplitPayment, DayOfWeek, RegularScheduleEntry } from '../../types';
 import { formatCurrency, getPricePerSession } from '../../utils/helpers';
@@ -155,7 +155,6 @@ export default function BatchPaymentForm({ students, settings, payments: allPaym
 
       {/* Per-student entries */}
       {entries.map((entry, idx) => {
-        const selectedStudent = students.find(s => s.id === entry.studentId);
         return (
           <div key={idx} className="bg-gray-50 rounded-lg border border-gray-200 p-4 space-y-3">
             <div className="flex items-center justify-between">
