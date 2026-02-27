@@ -33,7 +33,7 @@ export default function PaymentForm({ students, settings, payments: allPayments,
   );
   const [paidAt, setPaidAt] = useState(payment?.paidAt || format(new Date(), 'yyyy-MM-dd'));
   const [startDate, setStartDate] = useState(payment?.startDate || format(new Date(), 'yyyy-MM-dd'));
-  const [lastClassDate, setLastClassDate] = useState(payment?.lastClassDate || '');
+  // lastClassDate removed — only startDate is needed
   const [sessionsPerWeek, setSessionsPerWeek] = useState(
     payment?.sessionsPerWeek || payment?.regularSchedule?.length || 0
   );
@@ -116,7 +116,6 @@ export default function PaymentForm({ students, settings, payments: allPayments,
       classDuration,
       paidAt,
       startDate: isPastMode ? paidAt : startDate,
-      lastClassDate: isPastMode && lastClassDate ? lastClassDate : undefined,
       sessionsPerWeek: !isPastMode && sessionsPerWeek > 0 ? sessionsPerWeek : undefined,
       regularSchedule: !isPastMode && regularSchedule.length > 0 ? regularSchedule : undefined,
       memo: isPastMode ? (memo ? `[과거 기록] ${memo}` : '[과거 기록]') : memo,
@@ -553,7 +552,7 @@ export default function PaymentForm({ students, settings, payments: allPayments,
         )}
       </div>
 
-      <div className={isPastMode ? 'grid grid-cols-2 gap-4' : 'grid grid-cols-2 gap-4'}>
+      <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">결제일</label>
           <input
@@ -563,27 +562,15 @@ export default function PaymentForm({ students, settings, payments: allPayments,
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
           />
         </div>
-        {isPastMode ? (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">마지막 수업일</label>
-            <input
-              type="date"
-              value={lastClassDate}
-              onChange={e => setLastClassDate(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-            />
-          </div>
-        ) : (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">수업 시작일</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={e => setStartDate(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-            />
-          </div>
-        )}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">수업 시작일</label>
+          <input
+            type="date"
+            value={startDate}
+            onChange={e => setStartDate(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          />
+        </div>
       </div>
       {isPastMode && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700">

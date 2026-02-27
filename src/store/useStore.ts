@@ -433,6 +433,69 @@ export function useStore() {
     return newPayment;
   }, []);
 
+  // Batch Payment: create multiple payments sharing a transactionGroupId
+  const addBatchPayment = useCallback((
+    paymentEntries: Omit<Payment, 'id' | 'usedSessions' | 'remainingSessions' | 'completed' | 'transactionGroupId'>[],
+    options?: { isPastRecord?: boolean }
+  ) => {
+    const groupId = uuidv4();
+    const newPayments: Payment[] = [];
+
+    for (const entry of paymentEntries) {
+      const paymentId = uuidv4();
+      const newPayment: Payment = {
+        ...entry,
+        id: paymentId,
+        usedSessions: options?.isPastRecord ? entry.totalSessions : 0,
+        remainingSessions: options?.isPastRecord ? 0 : entry.totalSessions,
+        completed: !!options?.isPastRecord,
+        transactionGroupId: groupId,
+      };
+      newPayments.push(newPayment);
+
+      // Create/link schedule slots (same logic as addPayment)
+      if (entry.regularSchedule?.length && !options?.isPastRecord) {
+        setSchedules(prev => {
+          const cleaned = prev.filter(s => !(s.isOverrideHidden && s.studentId === entry.studentId));
+          const existingRegular = cleaned.filter(s =>
+            s.studentId === entry.studentId && s.isRegular && !s.isOverrideHidden
+          );
+          const newSlots: ScheduleSlot[] = [];
+          const updatedIds = new Set<string>();
+
+          for (const schedEntry of entry.regularSchedule!) {
+            const existing = existingRegular.find(s =>
+              s.dayOfWeek === schedEntry.day && s.startTime === schedEntry.startTime && !updatedIds.has(s.id)
+            );
+            if (existing) {
+              updatedIds.add(existing.id);
+            } else {
+              newSlots.push({
+                id: uuidv4(),
+                studentId: entry.studentId,
+                dayOfWeek: schedEntry.day,
+                startTime: schedEntry.startTime,
+                duration: entry.classDuration,
+                isRegular: true,
+                source: 'payment',
+                linkedPaymentId: paymentId,
+              });
+            }
+          }
+
+          const result = cleaned.map(s =>
+            updatedIds.has(s.id) ? { ...s, linkedPaymentId: paymentId, source: 'payment' as const, duration: entry.classDuration } : s
+          );
+
+          return [...result, ...newSlots];
+        });
+      }
+    }
+
+    setPayments(prev => [...prev, ...newPayments]);
+    return newPayments;
+  }, []);
+
   const updatePayment = useCallback((id: string, updates: Partial<Payment>) => {
     setPayments(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
   }, []);
@@ -597,7 +660,7 @@ export function useStore() {
     students, addStudent, updateStudent, deleteStudent, permanentDeleteStudent,
     schedules, addSchedule, updateSchedule, removeSchedule, restoreSchedule, moveSchedule,
     attendance, addAttendance, updateAttendance, deleteAttendance,
-    payments, addPayment, updatePayment, deletePayment,
+    payments, addPayment, addBatchPayment, updatePayment, deletePayment,
     holidays, addHoliday, removeHoliday,
     settings, updateSettings,
     trialStudents, addTrialStudent, updateTrialStudent, deleteTrialStudent,
