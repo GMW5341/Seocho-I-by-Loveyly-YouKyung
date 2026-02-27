@@ -39,8 +39,6 @@ export default function MakeupForm({ students, onSubmit, onCancel }: MakeupFormP
           value={studentId}
           onChange={e => {
             setStudentId(e.target.value);
-            const student = students.find(s => s.id === e.target.value);
-            if (student) setDuration(student.classDuration);
           }}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
           required
@@ -97,7 +95,7 @@ export default function MakeupForm({ students, onSubmit, onCancel }: MakeupFormP
 
       {selectedStudent && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
-          {selectedStudent.name} | 정규: {(selectedStudent.regularSchedule || []).map(entry => `${entry.day} ${entry.startTime}`).join(', ')} ({selectedStudent.classDuration}분)
+          {selectedStudent.name} ({selectedStudent.level})
         </div>
       )}
 

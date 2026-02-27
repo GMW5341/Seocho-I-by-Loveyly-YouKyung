@@ -17,7 +17,7 @@ const STATUS_OPTIONS: { value: AttendanceStatus; label: string; color: string }[
 ];
 
 export default function AttendanceManager() {
-  const { students, attendance, addAttendance, updateAttendance, deleteAttendance, payments } = useAppStore();
+  const { students, attendance, addAttendance, updateAttendance, deleteAttendance, payments, schedules } = useAppStore();
   const [currentWeekStart, setCurrentWeekStart] = useState(() =>
     startOfWeek(new Date(), { weekStartsOn: 1 })
   );
@@ -48,14 +48,12 @@ export default function AttendanceManager() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showCalendar]);
 
-  // Get scheduled times for a student on a day - from active payment (or last completed fallback)
+  // Get scheduled times for a student on a day - from independent schedule slots
   const getScheduledTimes = (studentId: string, dayOfWeek: DayOfWeek | null) => {
     if (!dayOfWeek) return [];
-    const activePayment = payments.find(p => p.studentId === studentId && !p.completed && p.remainingSessions > 0);
-    const payment = activePayment || payments
-      .filter(p => p.studentId === studentId && p.completed && p.regularSchedule?.length)
-      .sort((a, b) => b.paidAt.localeCompare(a.paidAt))[0];
-    return (payment?.regularSchedule || []).filter(entry => entry.day === dayOfWeek);
+    return schedules
+      .filter(s => s.studentId === studentId && s.isRegular && s.dayOfWeek === dayOfWeek && !s.isOverrideHidden)
+      .map(s => ({ day: s.dayOfWeek, startTime: s.startTime }));
   };
 
   // Get attendance record for a student on a specific date + startTime
@@ -82,7 +80,7 @@ export default function AttendanceManager() {
         date,
         status,
         startTime,
-        duration: activePayment?.classDuration || student.classDuration,
+        duration: activePayment?.classDuration || 60,
         isMakeup: status === '보강',
         memo: '',
       });
@@ -290,7 +288,7 @@ export default function AttendanceManager() {
                 <tr key={student.id} className="hover:bg-gray-50/50">
                   <td className="border-r border-gray-100 px-4 py-2 sticky left-0 bg-white z-10">
                     <div className="text-sm font-medium text-gray-900">{student.name}</div>
-                    <div className="text-xs text-gray-500">{student.level} | {(payments.find(p => p.studentId === student.id && !p.completed && p.remainingSessions > 0)?.classDuration || student.classDuration)}분</div>
+                    <div className="text-xs text-gray-500">{student.level} | {(payments.find(p => p.studentId === student.id && !p.completed && p.remainingSessions > 0)?.classDuration || 60)}분</div>
                   </td>
                   <td className="border-r border-gray-100 px-3 py-2 text-center">
                     <Badge variant={summary.remaining <= 1 ? 'danger' : summary.remaining <= 2 ? 'warning' : 'success'}>

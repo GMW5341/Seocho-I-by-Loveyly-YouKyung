@@ -20,6 +20,7 @@ import {
 import Modal from '../common/Modal';
 import MakeupForm from './MakeupForm';
 import TrialForm from './TrialForm';
+import DirectScheduleForm from './DirectScheduleForm';
 
 const PX_PER_MINUTE_WEEK = 2.5;
 const PX_PER_MINUTE_DAY = 4;
@@ -55,11 +56,12 @@ export default function ScheduleGrid() {
     moveSchedule, updateSchedule, removeSchedule, restoreSchedule, addSchedule,
     addTrialStudent, addTrialLesson,
     addAttendance, updateAttendance, deleteAttendance,
-    addPayment, updatePayment, updateStudent,
+    addPayment, updatePayment,
     specialClasses, specialClassStudents,
   } = useAppStore();
   const [showMakeupForm, setShowMakeupForm] = useState(false);
   const [showTrialForm, setShowTrialForm] = useState(false);
+  const [showDirectForm, setShowDirectForm] = useState(false);
   const [draggedSlot, setDraggedSlot] = useState<ScheduleSlot | null>(null);
   const [hoveredCell, setHoveredCell] = useState<{ day: DayOfWeek; time: string } | null>(null);
   const [memoSlot, setMemoSlot] = useState<{ slotId: string; studentId: string; date: string; startTime: string; memo: string } | null>(null);
@@ -230,74 +232,53 @@ export default function ScheduleGrid() {
     return markers;
   }, [timeRange]);
 
-  // Track unpaid student IDs (payment exhausted but still showing schedule)
+  // Track unpaid student IDs (has regular schedule but no active payment)
   const unpaidStudentIds = useMemo(() => {
     const ids = new Set<string>();
-    activeStudents.forEach(student => {
-      const hasActive = payments.some(p => p.studentId === student.id && !p.completed && p.remainingSessions > 0);
-      if (!hasActive) {
-        // 활성 결제 없음 → 가장 최근 완료된 결제에 스케줄이 있으면 미결제
-        const lastCompleted = payments
-          .filter(p => p.studentId === student.id && p.completed && p.regularSchedule?.length)
-          .sort((a, b) => b.paidAt.localeCompare(a.paidAt))[0];
-        if (lastCompleted) ids.add(student.id);
-      }
+    // Students with regular schedule slots but no active payment
+    const studentsWithSchedule = new Set(
+      schedules.filter(s => s.isRegular && !s.isOverrideHidden).map(s => s.studentId)
+    );
+    studentsWithSchedule.forEach(sid => {
+      const hasActive = payments.some(p => p.studentId === sid && !p.completed && p.remainingSessions > 0);
+      if (!hasActive) ids.add(sid);
     });
     return ids;
-  }, [activeStudents, payments]);
+  }, [schedules, payments]);
 
-  // Derive regular schedule slots from active payments (no longer stored in schedules)
+  // Read independent schedule slots directly (no longer derived from payments)
   const filteredSchedules = useMemo(() => {
     const wkStart = format(currentWeekStart, 'yyyy-MM-dd');
     const wkEnd = format(weekEnd, 'yyyy-MM-dd');
 
-    // 이번 주에 숨김 처리된 정규 슬롯 목록 수집
+    // 이번 주에 숨김 처리된 슬롯 제외
     const hiddenOverrides = schedules.filter(s =>
       s.isOverrideHidden && s.date && s.date >= wkStart && s.date <= wkEnd
     );
 
-    // 1. 활성 결제 또는 최근 완료 결제에서 정규 스케줄 슬롯 파생
-    const paymentDerivedSlots: ScheduleSlot[] = [];
-    activeStudents.forEach(student => {
-      const activePayment = payments.find(p => p.studentId === student.id && !p.completed && p.remainingSessions > 0);
-      // 활성 결제 우선, 없으면 최근 완료 결제 fallback (미결제 상태 표시용)
-      const payment = activePayment || payments
-        .filter(p => p.studentId === student.id && p.completed && p.regularSchedule?.length)
-        .sort((a, b) => b.paidAt.localeCompare(a.paidAt))[0];
-
-      if (payment?.regularSchedule?.length) {
-        payment.regularSchedule.forEach((entry, i) => {
-          const isHiddenThisWeek = hiddenOverrides.some(h =>
-            h.studentId === student.id &&
-            h.dayOfWeek === entry.day &&
-            h.startTime === entry.startTime
-          );
-          if (!isHiddenThisWeek) {
-            paymentDerivedSlots.push({
-              id: `pay-${payment.id}-${i}`,
-              studentId: student.id,
-              dayOfWeek: entry.day,
-              startTime: entry.startTime,
-              duration: payment.classDuration,
-              isRegular: true,
-            });
-          }
-        });
-      }
-    });
-
-    // 2. 비정규 슬롯 (보강, 체험, 임시 이동 등) - store에서 가져옴
-    const nonRegularSlots = schedules.filter(s => {
+    return schedules.filter(s => {
       if (s.isOverrideHidden) return false;
-      if (s.isRegular) return false; // 기존에 남아있을 수 있는 regular 슬롯 무시
+
+      // 정규 슬롯: 이번 주 숨김 처리 확인
+      if (s.isRegular) {
+        const isHiddenThisWeek = hiddenOverrides.some(h =>
+          h.studentId === s.studentId &&
+          h.dayOfWeek === s.dayOfWeek &&
+          h.startTime === s.startTime
+        );
+        if (isHiddenThisWeek) return false;
+        // 활성 학생만 표시
+        return activeStudents.some(st => st.id === s.studentId);
+      }
+
+      // 날짜 지정 슬롯 (보강, 체험 등): 이번 주에 해당하는 것만
       if (s.date) {
         return s.date >= wkStart && s.date <= wkEnd;
       }
+
       return true;
     });
-
-    return [...paymentDerivedSlots, ...nonRegularSlots];
-  }, [schedules, currentWeekStart, weekEnd, payments, activeStudents]);
+  }, [schedules, currentWeekStart, weekEnd, activeStudents]);
 
   // Generate virtual slots for active special classes
   const specialClassSlots = useMemo(() => {
@@ -379,6 +360,21 @@ export default function ScheduleGrid() {
     });
     return existingSlots.length < settings.maxStudentsPerSlot;
   }, [settings, schedules]);
+
+  // 직접 스케줄 입력 핸들러
+  const handleAddDirectSchedule = (data: { studentId: string; dayOfWeek: DayOfWeek; startTime: string; duration: ClassDuration; sessionsPerWeek: number; entries: { day: DayOfWeek; startTime: string }[] }) => {
+    for (const entry of data.entries) {
+      addSchedule({
+        studentId: data.studentId,
+        dayOfWeek: entry.day,
+        startTime: entry.startTime,
+        duration: data.duration,
+        isRegular: true,
+        source: 'direct',
+      });
+    }
+    setShowDirectForm(false);
+  };
 
   // Drag handlers - store the offset from block top where user grabbed
   const handleDragStart = (slot: ScheduleSlot, e: React.DragEvent) => {
@@ -718,6 +714,12 @@ export default function ScheduleGrid() {
               </button>
             )}
           </div>
+          <button
+            onClick={() => setShowDirectForm(true)}
+            className="bg-blue-600 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-medium hover:bg-blue-700 transition-colors whitespace-nowrap"
+          >
+            + 정규 스케줄
+          </button>
           <button
             onClick={() => setShowTrialForm(true)}
             className="bg-emerald-600 text-white px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-medium hover:bg-emerald-700 transition-colors whitespace-nowrap"
@@ -1204,6 +1206,15 @@ export default function ScheduleGrid() {
         />
       </Modal>
 
+      {/* Direct Schedule Modal */}
+      <Modal isOpen={showDirectForm} onClose={() => setShowDirectForm(false)} title="정규 스케줄 직접 입력" size="lg">
+        <DirectScheduleForm
+          students={activeStudents}
+          onSubmit={handleAddDirectSchedule}
+          onCancel={() => setShowDirectForm(false)}
+        />
+      </Modal>
+
       {/* Memo Modal */}
       <Modal isOpen={!!memoSlot} onClose={() => setMemoSlot(null)} title="메모" size="sm">
         {memoSlot && (
@@ -1277,14 +1288,7 @@ export default function ScheduleGrid() {
                         sessionsPerWeek: lastPayment.sessionsPerWeek,
                         regularSchedule: lastPayment.regularSchedule,
                       });
-                      // Sync schedule to student
-                      if (lastPayment.regularSchedule?.length) {
-                        updateStudent(student.id, {
-                          regularSchedule: lastPayment.regularSchedule as any,
-                          sessionsPerWeek: lastPayment.sessionsPerWeek || lastPayment.regularSchedule.length,
-                          classDuration: lastPayment.classDuration as any,
-                        });
-                      }
+                      // Schedule slots are now independent; addPayment will link them automatically
                     }}
                     className="shrink-0 px-4 py-2 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors whitespace-nowrap"
                   >

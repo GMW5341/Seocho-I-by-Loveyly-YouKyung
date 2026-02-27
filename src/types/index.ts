@@ -25,18 +25,14 @@ export interface Student {
   gender?: Gender;
   grade: StudentGrade;
   level: ClassLevel;
-  classDuration: ClassDuration;
-  sessionsPerWeek: number; // 주 1~5회
-  regularSchedule: RegularScheduleEntry[];
-  // 하위 호환용 (마이그레이션 후 사용하지 않음)
-  regularDays?: DayOfWeek[];
-  regularStartTimes?: { [key in DayOfWeek]?: string };
   phone: string;
   parentPhone: string;
   memo: string;
   active: boolean;
   createdAt: string;
 }
+
+export type ScheduleSource = 'direct' | 'payment' | 'makeup' | 'trial';
 
 export interface ScheduleSlot {
   id: string;
@@ -45,6 +41,8 @@ export interface ScheduleSlot {
   startTime: string; // "HH:mm"
   duration: ClassDuration;
   isRegular: boolean; // 정규 vs 보강
+  source?: ScheduleSource; // 스케줄 출처 (직접입력 / 결제연동 / 보강 / 체험)
+  linkedPaymentId?: string; // 연결된 결제 ID (결제 만료 추적용)
   isTrial?: boolean; // 체험 수업 여부
   trialStudentId?: string; // 체험 수업 학생 ID
   date?: string; // ISO date for specific date slots (보강)

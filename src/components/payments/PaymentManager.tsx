@@ -10,7 +10,7 @@ import Badge from '../common/Badge';
 import PaymentForm from './PaymentForm';
 
 export default function PaymentManager() {
-  const { students, payments, addPayment, updatePayment, deletePayment, updateStudent, attendance, holidays, settings } = useAppStore();
+  const { students, payments, addPayment, updatePayment, deletePayment, attendance, holidays, settings } = useAppStore();
   const [showForm, setShowForm] = useState(false);
   const [showPastForm, setShowPastForm] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | undefined>();
@@ -40,7 +40,7 @@ export default function PaymentManager() {
         lastClassDate = calculateLastClassDate(
           activePayment.startDate,
           activePayment.totalSessions,
-          activePayment.regularSchedule || student.regularSchedule || [],
+          activePayment.regularSchedule || [],
           holidayDates,
           studentAttendance
         );
@@ -96,7 +96,7 @@ export default function PaymentManager() {
           lastClassDate = calculateLastClassDate(
             p.startDate,
             p.totalSessions,
-            p.regularSchedule || student?.regularSchedule || [],
+            p.regularSchedule || [],
             holidayDates,
             studentAttendance
           );
@@ -117,16 +117,6 @@ export default function PaymentManager() {
     return filtered.sort((a, b) => b.payment.paidAt.localeCompare(a.payment.paidAt));
   }, [payments, students, historySearchQuery, attendance, holidays]);
 
-  const syncStudentFromPayment = (studentId: string, paymentData: { regularSchedule?: { day: string; startTime: string }[]; sessionsPerWeek?: number; classDuration: number }) => {
-    if (!paymentData.regularSchedule?.length) return;
-    // Update student's schedule data (for reference in other components)
-    updateStudent(studentId, {
-      regularSchedule: paymentData.regularSchedule as any,
-      sessionsPerWeek: paymentData.sessionsPerWeek || paymentData.regularSchedule.length,
-      classDuration: paymentData.classDuration as any,
-    });
-  };
-
   const handleAddPayment = (data: Omit<Payment, 'id' | 'usedSessions' | 'remainingSessions' | 'completed'> & { isPastRecord?: boolean }) => {
     const { isPastRecord, ...paymentData } = data;
     const newPayment = addPayment(paymentData);
@@ -136,10 +126,8 @@ export default function PaymentManager() {
         remainingSessions: 0,
         completed: true,
       });
-    } else {
-      // Sync schedule from payment to student + schedule slots
-      syncStudentFromPayment(paymentData.studentId, paymentData);
     }
+    // Schedule slots are now independent; addPayment links them automatically
     setShowForm(false);
     setShowPastForm(false);
   };
@@ -161,10 +149,6 @@ export default function PaymentManager() {
           remainingSessions: newRemaining,
           completed: newRemaining <= 0,
         });
-      }
-      // Sync schedule if it was updated in an active payment
-      if (!editingPayment.completed && data.regularSchedule?.length) {
-        syncStudentFromPayment(data.studentId, data);
       }
       setEditingPayment(undefined);
     }
@@ -279,7 +263,7 @@ export default function PaymentManager() {
                   <div className="text-xs text-gray-500">{data.student.level}</div>
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-600">
-                  {data.activePayment?.classDuration || data.student.classDuration}분
+                  {data.activePayment?.classDuration || 60}분
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-900 font-medium">
                   {data.activePayment ? formatCurrency(data.activePayment.amount) : '-'}

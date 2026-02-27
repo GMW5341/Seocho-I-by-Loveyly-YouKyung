@@ -46,38 +46,62 @@ export function useStore() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [students, setStudents] = useState<Student[]>(() => {
     const loaded = loadFromStorage<Record<string, unknown>[]>(STORAGE_KEYS.students, []);
+    // Strip deprecated schedule fields from student records (clean migration)
     return loaded.map(s => {
-      const student = s as unknown as Student & { regularStartTime?: string };
-      // regularSchedule이 이미 있으면 그대로 사용
-      if (student.regularSchedule && Array.isArray(student.regularSchedule) && student.regularSchedule.length > 0) {
-        return student as Student;
-      }
-      // regularStartTimes에서 마이그레이션
-      if (student.regularStartTimes && student.regularDays) {
-        const schedule = student.regularDays.map(day => ({
-          day,
-          startTime: student.regularStartTimes![day] || '14:00',
-        }));
-        return { ...student, regularSchedule: schedule } as Student;
-      }
-      // regularStartTime (단일)에서 마이그레이션
-      if (student.regularStartTime && student.regularDays) {
-        const schedule = student.regularDays.map(day => ({
-          day,
-          startTime: student.regularStartTime!,
-        }));
-        return { ...student, regularSchedule: schedule } as Student;
-      }
-      return { ...student, regularSchedule: [] } as Student;
+      const { classDuration: _cd, sessionsPerWeek: _spw, regularSchedule: _rs, regularDays: _rd, regularStartTimes: _rst, regularStartTime: _rst2, ...clean } = s as Record<string, unknown>;
+      return clean as unknown as Student;
     });
   });
+  // Load payments first (needed for schedule migration)
+  const [payments, setPayments] = useState<Payment[]>(() => loadFromStorage(STORAGE_KEYS.payments, []));
   const [schedules, setSchedules] = useState<ScheduleSlot[]>(() => {
-    // On load, remove old regular schedule slots - regular schedules are now derived from payments
     const loaded = loadFromStorage<ScheduleSlot[]>(STORAGE_KEYS.schedules, []);
-    return loaded.filter(s => !s.isRegular);
+    // Check if migration from payment-derived to independent schedules is needed
+    const hasPaymentLinked = loaded.some(s => s.source === 'payment' || s.source === 'direct');
+    if (hasPaymentLinked) return loaded; // Already migrated
+
+    // Migrate: convert Payment.regularSchedule → independent ScheduleSlot records
+    const allPayments = loadFromStorage<Payment[]>(STORAGE_KEYS.payments, []);
+    const migratedSlots: ScheduleSlot[] = [];
+
+    // For each student with a payment that has regularSchedule, create independent slots
+    const processedStudents = new Set<string>();
+    // Process active payments first, then completed (for fallback)
+    const sortedPayments = [...allPayments].sort((a, b) => {
+      if (a.completed !== b.completed) return a.completed ? 1 : -1;
+      return b.paidAt.localeCompare(a.paidAt);
+    });
+
+    for (const p of sortedPayments) {
+      if (processedStudents.has(p.studentId)) continue;
+      if (!p.regularSchedule?.length) continue;
+      processedStudents.add(p.studentId);
+      for (const entry of p.regularSchedule) {
+        migratedSlots.push({
+          id: uuidv4(),
+          studentId: p.studentId,
+          dayOfWeek: entry.day,
+          startTime: entry.startTime,
+          duration: p.classDuration,
+          isRegular: true,
+          source: 'payment',
+          linkedPaymentId: p.id,
+        });
+      }
+    }
+
+    // Also migrate old student-only schedule data (from legacy Student.regularSchedule)
+    // by checking loaded schedules that had isRegular=true (old format had them stripped, but some might remain)
+    const nonRegular = loaded.filter(s => !s.isRegular);
+    // Tag existing non-regular slots with source
+    const taggedNonRegular = nonRegular.map(s => ({
+      ...s,
+      source: (s.isTrial ? 'trial' : 'makeup') as ScheduleSlot['source'],
+    }));
+
+    return [...migratedSlots, ...taggedNonRegular];
   });
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(() => loadFromStorage(STORAGE_KEYS.attendance, []));
-  const [payments, setPayments] = useState<Payment[]>(() => loadFromStorage(STORAGE_KEYS.payments, []));
   const [holidays, setHolidays] = useState<Holiday[]>(() => loadFromStorage(STORAGE_KEYS.holidays, []));
   const [settings, setSettings] = useState<AcademySettings>(() => loadFromStorage(STORAGE_KEYS.settings, DEFAULT_SETTINGS));
   const [trialStudents, setTrialStudents] = useState<TrialStudent[]>(() => loadFromStorage(STORAGE_KEYS.trialStudents, []));
@@ -157,7 +181,7 @@ export function useStore() {
       // Only completed payments remain → check if stale
       const latest = studentPayments.sort((a, b) => b.paidAt.localeCompare(a.paidAt))[0];
       if (!latest) return;
-      const sessionsPerWeek = latest.regularSchedule?.length || latest.sessionsPerWeek || 1;
+      const sessionsPerWeek = latest.regularSchedule?.length || latest.sessionsPerWeek || 1; // sessionsPerWeek kept on Payment type
       const estimatedWeeks = Math.ceil(latest.totalSessions / sessionsPerWeek);
       const endDate = new Date(latest.startDate);
       endDate.setDate(endDate.getDate() + estimatedWeeks * 7 + 28); // +4 weeks buffer
@@ -353,16 +377,59 @@ export function useStore() {
 
   // Payment CRUD
   const addPayment = useCallback((payment: Omit<Payment, 'id' | 'usedSessions' | 'remainingSessions' | 'completed'>) => {
+    const paymentId = uuidv4();
     const newPayment: Payment = {
       ...payment,
-      id: uuidv4(),
+      id: paymentId,
       usedSessions: 0,
       remainingSessions: payment.totalSessions,
       completed: false,
     };
     setPayments(prev => [...prev, newPayment]);
-    // Clear hidden schedule overrides for this student so schedule appears immediately
-    setSchedules(prev => prev.filter(s => !(s.isOverrideHidden && s.studentId === payment.studentId)));
+
+    // If payment has regularSchedule, link existing schedule slots or create new ones
+    if (payment.regularSchedule?.length) {
+      setSchedules(prev => {
+        // Remove old overrides and unlinked payment slots for this student
+        const cleaned = prev.filter(s => !(s.isOverrideHidden && s.studentId === payment.studentId));
+
+        // Link existing direct/payment regular slots to this new payment,
+        // or create new slots if schedule entries are new
+        const existingRegular = cleaned.filter(s =>
+          s.studentId === payment.studentId && s.isRegular && !s.isOverrideHidden
+        );
+        const newSlots: ScheduleSlot[] = [];
+        const updatedIds = new Set<string>();
+
+        for (const entry of payment.regularSchedule!) {
+          const existing = existingRegular.find(s =>
+            s.dayOfWeek === entry.day && s.startTime === entry.startTime && !updatedIds.has(s.id)
+          );
+          if (existing) {
+            updatedIds.add(existing.id);
+          } else {
+            newSlots.push({
+              id: uuidv4(),
+              studentId: payment.studentId,
+              dayOfWeek: entry.day,
+              startTime: entry.startTime,
+              duration: payment.classDuration,
+              isRegular: true,
+              source: 'payment',
+              linkedPaymentId: paymentId,
+            });
+          }
+        }
+
+        // Update linked payment on existing matched slots
+        const result = cleaned.map(s =>
+          updatedIds.has(s.id) ? { ...s, linkedPaymentId: paymentId, source: 'payment' as const, duration: payment.classDuration } : s
+        );
+
+        return [...result, ...newSlots];
+      });
+    }
+
     return newPayment;
   }, []);
 
@@ -375,19 +442,14 @@ export function useStore() {
       const payment = prev.find(p => p.id === id);
       if (payment) {
         const sid = payment.studentId;
-        const remaining = prev.filter(p => p.id !== id && p.studentId === sid);
-        const hasActiveRemaining = remaining.some(p => !p.completed && p.remainingSessions > 0);
         // Cascade: delete attendance records from this payment's start date
         setAttendance(att => att.filter(a =>
           !(a.studentId === sid && a.date >= payment.startDate)
         ));
-        // Always clean up schedule entries for this student
-        setSchedules(sch => sch.filter(s => s.studentId !== sid));
-        if (!hasActiveRemaining) {
-          // No active payment remains → remove ALL payments (including completed)
-          // to prevent 미결제 fallback from old completed payments
-          return prev.filter(p => p.studentId !== sid);
-        }
+        // Unlink schedules from this payment (keep slots, just remove linkage)
+        setSchedules(sch => sch.map(s =>
+          s.linkedPaymentId === id ? { ...s, linkedPaymentId: undefined, source: 'direct' as const } : s
+        ));
       }
       return prev.filter(p => p.id !== id);
     });

@@ -81,8 +81,6 @@ export default function PaymentForm({ students, settings, payments: allPayments,
         setClassDuration(latestPayment.classDuration);
         setSessionsPerWeek(latestPayment.sessionsPerWeek || latestPayment.regularSchedule!.length);
         setRegularSchedule([...latestPayment.regularSchedule!]);
-      } else {
-        setClassDuration(selectedStudent.classDuration);
       }
     }
   }, [selectedStudent, payment, allPayments]);
@@ -151,7 +149,7 @@ export default function PaymentForm({ students, settings, payments: allPayments,
           {students
             .filter(s => !studentSearch || s.name.includes(studentSearch))
             .map(s => (
-              <option key={s.id} value={s.id}>{s.name} ({s.level} / {s.classDuration}분)</option>
+              <option key={s.id} value={s.id}>{s.name} ({s.level})</option>
             ))}
         </select>
       </div>
