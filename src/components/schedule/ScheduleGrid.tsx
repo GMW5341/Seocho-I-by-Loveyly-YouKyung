@@ -16,6 +16,8 @@ import {
   minutesToTime,
   layoutSlotsForDay,
   formatCurrency,
+  calculateLastClassDate,
+  expandHolidayDates,
 } from '../../utils/helpers';
 import Modal from '../common/Modal';
 import MakeupForm from './MakeupForm';
@@ -246,6 +248,28 @@ export default function ScheduleGrid() {
     return ids;
   }, [schedules, payments]);
 
+  // Compute projected end dates for payments (for date-range filtering)
+  const paymentEndDateMap = useMemo(() => {
+    const map = new Map<string, string | null>();
+    const holidayDates = expandHolidayDates(holidays);
+    for (const p of payments) {
+      if (p.completed) {
+        // 완료된 결제: null → 스케줄 표시 안 함
+        map.set(p.id, null);
+      } else if (p.startDate && p.regularSchedule?.length) {
+        const endDate = calculateLastClassDate(
+          p.startDate,
+          p.totalSessions,
+          p.regularSchedule,
+          holidayDates,
+          attendance.filter(a => a.studentId === p.studentId)
+        );
+        map.set(p.id, endDate);
+      }
+    }
+    return map;
+  }, [payments, holidays, attendance]);
+
   // Read independent schedule slots directly (no longer derived from payments)
   const filteredSchedules = useMemo(() => {
     const wkStart = format(currentWeekStart, 'yyyy-MM-dd');
@@ -268,7 +292,21 @@ export default function ScheduleGrid() {
         );
         if (isHiddenThisWeek) return false;
         // 활성 학생만 표시
-        return activeStudents.some(st => st.id === s.studentId);
+        if (!activeStudents.some(st => st.id === s.studentId)) return false;
+
+        // 날짜 범위 필터링: startDate ~ 마지막 수업일
+        if (s.linkedPaymentId) {
+          const startDate = s.startDate;
+          if (startDate && startDate > wkEnd) return false; // 시작일이 아직 안 됨
+
+          const endDate = paymentEndDateMap.get(s.linkedPaymentId);
+          // endDate가 null이면 완료된 결제 → 표시 안 함
+          if (endDate === null) return false;
+          // endDate가 있고 이번 주 시작보다 이전이면 이미 끝남
+          if (endDate && endDate < wkStart) return false;
+        }
+
+        return true;
       }
 
       // 날짜 지정 슬롯 (보강, 체험 등): 이번 주에 해당하는 것만
@@ -278,7 +316,7 @@ export default function ScheduleGrid() {
 
       return true;
     });
-  }, [schedules, currentWeekStart, weekEnd, activeStudents]);
+  }, [schedules, currentWeekStart, weekEnd, activeStudents, paymentEndDateMap]);
 
   // Generate virtual slots for active special classes
   const specialClassSlots = useMemo(() => {

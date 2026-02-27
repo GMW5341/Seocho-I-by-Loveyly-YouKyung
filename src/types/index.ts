@@ -43,6 +43,7 @@ export interface ScheduleSlot {
   isRegular: boolean; // 정규 vs 보강
   source?: ScheduleSource; // 스케줄 출처 (직접입력 / 결제연동 / 보강 / 체험)
   linkedPaymentId?: string; // 연결된 결제 ID (결제 만료 추적용)
+  startDate?: string; // 스케줄 시작일 (이 날부터 표시)
   isTrial?: boolean; // 체험 수업 여부
   trialStudentId?: string; // 체험 수업 학생 ID
   date?: string; // ISO date for specific date slots (보강)

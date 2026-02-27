@@ -56,50 +56,66 @@ export function useStore() {
   const [payments, setPayments] = useState<Payment[]>(() => loadFromStorage(STORAGE_KEYS.payments, []));
   const [schedules, setSchedules] = useState<ScheduleSlot[]>(() => {
     const loaded = loadFromStorage<ScheduleSlot[]>(STORAGE_KEYS.schedules, []);
+    const allPayments = loadFromStorage<Payment[]>(STORAGE_KEYS.payments, []);
+
     // Check if migration from payment-derived to independent schedules is needed
     const hasPaymentLinked = loaded.some(s => s.source === 'payment' || s.source === 'direct');
-    if (hasPaymentLinked) return loaded; // Already migrated
 
-    // Migrate: convert Payment.regularSchedule → independent ScheduleSlot records
-    const allPayments = loadFromStorage<Payment[]>(STORAGE_KEYS.payments, []);
-    const migratedSlots: ScheduleSlot[] = [];
+    let result: ScheduleSlot[];
 
-    // For each student with a payment that has regularSchedule, create independent slots
-    const processedStudents = new Set<string>();
-    // Process active payments first, then completed (for fallback)
-    const sortedPayments = [...allPayments].sort((a, b) => {
-      if (a.completed !== b.completed) return a.completed ? 1 : -1;
-      return b.paidAt.localeCompare(a.paidAt);
-    });
+    if (hasPaymentLinked) {
+      result = loaded;
+    } else {
+      // Migrate: convert Payment.regularSchedule → independent ScheduleSlot records
+      const migratedSlots: ScheduleSlot[] = [];
+      const processedStudents = new Set<string>();
+      const sortedPayments = [...allPayments].sort((a, b) => {
+        if (a.completed !== b.completed) return a.completed ? 1 : -1;
+        return b.paidAt.localeCompare(a.paidAt);
+      });
 
-    for (const p of sortedPayments) {
-      if (processedStudents.has(p.studentId)) continue;
-      if (!p.regularSchedule?.length) continue;
-      processedStudents.add(p.studentId);
-      for (const entry of p.regularSchedule) {
-        migratedSlots.push({
-          id: uuidv4(),
-          studentId: p.studentId,
-          dayOfWeek: entry.day,
-          startTime: entry.startTime,
-          duration: p.classDuration,
-          isRegular: true,
-          source: 'payment',
-          linkedPaymentId: p.id,
-        });
+      for (const p of sortedPayments) {
+        if (processedStudents.has(p.studentId)) continue;
+        if (!p.regularSchedule?.length) continue;
+        processedStudents.add(p.studentId);
+        for (const entry of p.regularSchedule) {
+          migratedSlots.push({
+            id: uuidv4(),
+            studentId: p.studentId,
+            dayOfWeek: entry.day,
+            startTime: entry.startTime,
+            duration: p.classDuration,
+            isRegular: true,
+            source: 'payment',
+            linkedPaymentId: p.id,
+            startDate: p.startDate,
+          });
+        }
       }
+
+      const nonRegular = loaded.filter(s => !s.isRegular);
+      const taggedNonRegular = nonRegular.map(s => ({
+        ...s,
+        source: (s.isTrial ? 'trial' : 'makeup') as ScheduleSlot['source'],
+      }));
+
+      result = [...migratedSlots, ...taggedNonRegular];
     }
 
-    // Also migrate old student-only schedule data (from legacy Student.regularSchedule)
-    // by checking loaded schedules that had isRegular=true (old format had them stripped, but some might remain)
-    const nonRegular = loaded.filter(s => !s.isRegular);
-    // Tag existing non-regular slots with source
-    const taggedNonRegular = nonRegular.map(s => ({
-      ...s,
-      source: (s.isTrial ? 'trial' : 'makeup') as ScheduleSlot['source'],
-    }));
+    // Second migration: backfill startDate from linked payment for existing slots missing it
+    const needsStartDate = result.some(s => s.linkedPaymentId && !s.startDate);
+    if (needsStartDate) {
+      const paymentMap = new Map(allPayments.map(p => [p.id, p]));
+      result = result.map(s => {
+        if (s.linkedPaymentId && !s.startDate) {
+          const payment = paymentMap.get(s.linkedPaymentId);
+          if (payment) return { ...s, startDate: payment.startDate };
+        }
+        return s;
+      });
+    }
 
-    return [...migratedSlots, ...taggedNonRegular];
+    return result;
   });
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(() => loadFromStorage(STORAGE_KEYS.attendance, []));
   const [holidays, setHolidays] = useState<Holiday[]>(() => loadFromStorage(STORAGE_KEYS.holidays, []));
@@ -417,13 +433,14 @@ export function useStore() {
               isRegular: true,
               source: 'payment',
               linkedPaymentId: paymentId,
+              startDate: payment.startDate,
             });
           }
         }
 
         // Update linked payment on existing matched slots
         const result = cleaned.map(s =>
-          updatedIds.has(s.id) ? { ...s, linkedPaymentId: paymentId, source: 'payment' as const, duration: payment.classDuration } : s
+          updatedIds.has(s.id) ? { ...s, linkedPaymentId: paymentId, source: 'payment' as const, duration: payment.classDuration, startDate: payment.startDate } : s
         );
 
         return [...result, ...newSlots];
@@ -479,12 +496,13 @@ export function useStore() {
                 isRegular: true,
                 source: 'payment',
                 linkedPaymentId: paymentId,
+                startDate: entry.startDate,
               });
             }
           }
 
           const result = cleaned.map(s =>
-            updatedIds.has(s.id) ? { ...s, linkedPaymentId: paymentId, source: 'payment' as const, duration: entry.classDuration } : s
+            updatedIds.has(s.id) ? { ...s, linkedPaymentId: paymentId, source: 'payment' as const, duration: entry.classDuration, startDate: entry.startDate } : s
           );
 
           return [...result, ...newSlots];

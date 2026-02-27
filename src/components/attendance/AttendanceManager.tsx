@@ -7,7 +7,7 @@ import {
 import { ko } from 'date-fns/locale';
 import { useAppStore } from '../../store/StoreContext';
 import type { AttendanceStatus, DayOfWeek } from '../../types';
-import { getDayOfWeekFromDate } from '../../utils/helpers';
+import { getDayOfWeekFromDate, calculateLastClassDate, expandHolidayDates } from '../../utils/helpers';
 import Badge from '../common/Badge';
 
 const STATUS_OPTIONS: { value: AttendanceStatus; label: string; color: string }[] = [
@@ -17,7 +17,7 @@ const STATUS_OPTIONS: { value: AttendanceStatus; label: string; color: string }[
 ];
 
 export default function AttendanceManager() {
-  const { students, attendance, addAttendance, updateAttendance, deleteAttendance, payments, schedules } = useAppStore();
+  const { students, attendance, addAttendance, updateAttendance, deleteAttendance, payments, schedules, holidays } = useAppStore();
   const [currentWeekStart, setCurrentWeekStart] = useState(() =>
     startOfWeek(new Date(), { weekStartsOn: 1 })
   );
@@ -33,15 +33,47 @@ export default function AttendanceManager() {
   // Today's day of week for filtering
   const todayDayOfWeek = useMemo(() => getDayOfWeekFromDate(format(new Date(), 'yyyy-MM-dd')), []);
 
+  // Compute projected end dates for payments (for date-range filtering)
+  const paymentEndDateMap = useMemo(() => {
+    const map = new Map<string, string | null>();
+    const holidayDates = expandHolidayDates(holidays);
+    for (const p of payments) {
+      if (p.completed) {
+        map.set(p.id, null);
+      } else if (p.startDate && p.regularSchedule?.length) {
+        const endDate = calculateLastClassDate(
+          p.startDate,
+          p.totalSessions,
+          p.regularSchedule,
+          holidayDates,
+          attendance.filter(a => a.studentId === p.studentId)
+        );
+        map.set(p.id, endDate);
+      }
+    }
+    return map;
+  }, [payments, holidays, attendance]);
+
+  // Check if a regular schedule slot is active on a given date
+  const isSlotActiveOnDate = (s: typeof schedules[0], dateStr: string) => {
+    if (!s.linkedPaymentId) return true; // 결제 연동 없는 슬롯은 항상 표시
+    if (s.startDate && s.startDate > dateStr) return false; // 시작일 전
+    const endDate = paymentEndDateMap.get(s.linkedPaymentId);
+    if (endDate === null) return false; // 완료된 결제
+    if (endDate && endDate < dateStr) return false; // 이미 끝남
+    return true;
+  };
+
   // Students who have a scheduled class today
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
   const todayStudentIds = useMemo(() => {
     if (!todayDayOfWeek) return new Set<string>();
     return new Set(
       schedules
-        .filter(s => s.isRegular && s.dayOfWeek === todayDayOfWeek && !s.isOverrideHidden)
+        .filter(s => s.isRegular && s.dayOfWeek === todayDayOfWeek && !s.isOverrideHidden && isSlotActiveOnDate(s, todayStr))
         .map(s => s.studentId)
     );
-  }, [schedules, todayDayOfWeek]);
+  }, [schedules, todayDayOfWeek, paymentEndDateMap]);
 
   const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
   const weekDays = eachDayOfInterval({ start: currentWeekStart, end: weekEnd })
@@ -62,11 +94,15 @@ export default function AttendanceManager() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showCalendar]);
 
-  // Get scheduled times for a student on a day - from independent schedule slots
-  const getScheduledTimes = (studentId: string, dayOfWeek: DayOfWeek | null) => {
+  // Get scheduled times for a student on a day - from independent schedule slots (date-aware)
+  const getScheduledTimes = (studentId: string, dayOfWeek: DayOfWeek | null, dateStr?: string) => {
     if (!dayOfWeek) return [];
     return schedules
-      .filter(s => s.studentId === studentId && s.isRegular && s.dayOfWeek === dayOfWeek && !s.isOverrideHidden)
+      .filter(s => {
+        if (s.studentId !== studentId || !s.isRegular || s.dayOfWeek !== dayOfWeek || s.isOverrideHidden) return false;
+        if (dateStr) return isSlotActiveOnDate(s, dateStr);
+        return true;
+      })
       .map(s => ({ day: s.dayOfWeek, startTime: s.startTime }));
   };
 
@@ -298,7 +334,7 @@ export default function AttendanceManager() {
               const weekRecords = weekDays.map(day => {
                 const dateStr = format(day, 'yyyy-MM-dd');
                 const dayOfWeek = getDayOfWeekFromDate(dateStr);
-                const scheduledTimes = getScheduledTimes(student.id, dayOfWeek);
+                const scheduledTimes = getScheduledTimes(student.id, dayOfWeek, dateStr);
                 const records = scheduledTimes.map(entry => ({
                   startTime: entry.startTime,
                   record: getRecord(student.id, dateStr, entry.startTime),
@@ -326,7 +362,7 @@ export default function AttendanceManager() {
                   {weekDays.map(day => {
                     const dateStr = format(day, 'yyyy-MM-dd');
                     const dayOfWeek = getDayOfWeekFromDate(dateStr);
-                    const scheduledTimes = getScheduledTimes(student.id, dayOfWeek);
+                    const scheduledTimes = getScheduledTimes(student.id, dayOfWeek, dateStr);
                     const isToday = isSameDay(day, new Date());
 
                     return (
