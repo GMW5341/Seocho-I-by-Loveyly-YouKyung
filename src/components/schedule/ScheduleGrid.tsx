@@ -400,7 +400,7 @@ export default function ScheduleGrid() {
   }, [settings, schedules]);
 
   // 직접 스케줄 입력 핸들러
-  const handleAddDirectSchedule = (data: { studentId: string; dayOfWeek: DayOfWeek; startTime: string; duration: ClassDuration; sessionsPerWeek: number; entries: { day: DayOfWeek; startTime: string }[] }) => {
+  const handleAddDirectSchedule = (data: { studentId: string; dayOfWeek: DayOfWeek; startTime: string; duration: ClassDuration; sessionsPerWeek: number; entries: { day: DayOfWeek; startTime: string }[]; startDate?: string }) => {
     for (const entry of data.entries) {
       addSchedule({
         studentId: data.studentId,
@@ -409,6 +409,7 @@ export default function ScheduleGrid() {
         duration: data.duration,
         isRegular: true,
         source: 'direct',
+        startDate: data.startDate,
       });
     }
     setShowDirectForm(false);

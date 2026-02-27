@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { format } from 'date-fns';
 import type { Student, DayOfWeek, ClassDuration, RegularScheduleEntry } from '../../types';
 
 const DAYS: DayOfWeek[] = ['월', '화', '수', '목', '금', '토'];
@@ -12,6 +13,7 @@ interface DirectScheduleFormProps {
     duration: ClassDuration;
     sessionsPerWeek: number;
     entries: { day: DayOfWeek; startTime: string }[];
+    startDate?: string;
   }) => void;
   onCancel: () => void;
 }
@@ -22,6 +24,7 @@ export default function DirectScheduleForm({ students, onSubmit, onCancel }: Dir
   const [duration, setDuration] = useState<ClassDuration>(60);
   const [sessionsPerWeek, setSessionsPerWeek] = useState(0);
   const [entries, setEntries] = useState<RegularScheduleEntry[]>([]);
+  const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
   const handleSessionsChange = (n: number) => {
     setSessionsPerWeek(n);
@@ -48,6 +51,7 @@ export default function DirectScheduleForm({ students, onSubmit, onCancel }: Dir
       duration,
       sessionsPerWeek,
       entries,
+      startDate: startDate || undefined,
     });
   };
 
@@ -94,6 +98,17 @@ export default function DirectScheduleForm({ students, onSubmit, onCancel }: Dir
             </button>
           ))}
         </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">수업 시작일</label>
+        <input
+          type="date"
+          value={startDate}
+          onChange={e => setStartDate(e.target.value)}
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none"
+        />
+        <p className="text-xs text-gray-400 mt-0.5">이 날짜부터 스케줄이 표시됩니다</p>
       </div>
 
       <div>
