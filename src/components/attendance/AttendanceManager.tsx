@@ -25,9 +25,23 @@ export default function AttendanceManager() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showCalendar, setShowCalendar] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
+  const [showTodayOnly, setShowTodayOnly] = useState(true);
   const calendarRef = useRef<HTMLDivElement>(null);
 
   const activeStudents = useMemo(() => students.filter(s => s.active), [students]);
+
+  // Today's day of week for filtering
+  const todayDayOfWeek = useMemo(() => getDayOfWeekFromDate(format(new Date(), 'yyyy-MM-dd')), []);
+
+  // Students who have a scheduled class today
+  const todayStudentIds = useMemo(() => {
+    if (!todayDayOfWeek) return new Set<string>();
+    return new Set(
+      schedules
+        .filter(s => s.isRegular && s.dayOfWeek === todayDayOfWeek && !s.isOverrideHidden)
+        .map(s => s.studentId)
+    );
+  }, [schedules, todayDayOfWeek]);
 
   const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
   const weekDays = eachDayOfInterval({ start: currentWeekStart, end: weekEnd })
@@ -104,8 +118,12 @@ export default function AttendanceManager() {
     if (searchQuery) {
       result = result.filter(s => s.name.includes(searchQuery));
     }
+    // When no specific student or search is active, filter to today's students
+    if (showTodayOnly && selectedStudent === 'all' && !searchQuery) {
+      result = result.filter(s => todayStudentIds.has(s.id));
+    }
     return result;
-  }, [activeStudents, selectedStudent, searchQuery]);
+  }, [activeStudents, selectedStudent, searchQuery, showTodayOnly, todayStudentIds]);
 
   // Calendar generation
   const calendarDays = useMemo(() => {
@@ -209,7 +227,17 @@ export default function AttendanceManager() {
       </div>
 
       {/* Student filter */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <button
+          onClick={() => setShowTodayOnly(!showTodayOnly)}
+          className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+            showTodayOnly
+              ? 'bg-indigo-50 border-indigo-300 text-indigo-700'
+              : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+          }`}
+        >
+          {showTodayOnly ? `오늘 수업 (${todayStudentIds.size}명)` : '전체 원생'}
+        </button>
         <div className="relative">
           <input
             type="text"
@@ -351,7 +379,19 @@ export default function AttendanceManager() {
             {filteredStudents.length === 0 && (
               <tr>
                 <td colSpan={weekDays.length + 3} className="px-4 py-12 text-center text-sm text-gray-400">
-                  원생 데이터가 없습니다.
+                  {showTodayOnly && selectedStudent === 'all' && !searchQuery
+                    ? todayDayOfWeek
+                      ? `오늘(${todayDayOfWeek}요일) 수업이 있는 원생이 없습니다.`
+                      : '오늘은 수업이 없는 날입니다. (일/월)'
+                    : '원생 데이터가 없습니다.'}
+                  {showTodayOnly && selectedStudent === 'all' && !searchQuery && (
+                    <button
+                      onClick={() => setShowTodayOnly(false)}
+                      className="block mx-auto mt-2 text-indigo-500 hover:text-indigo-700 underline text-sm"
+                    >
+                      전체 원생 보기
+                    </button>
+                  )}
                 </td>
               </tr>
             )}
