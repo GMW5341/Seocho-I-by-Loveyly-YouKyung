@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import type { Student, DayOfWeek, ClassDuration, RegularScheduleEntry } from '../../types';
+import { DAYS_OF_WEEK } from '../../utils/helpers';
 
-const DAYS: DayOfWeek[] = ['월', '화', '수', '목', '금', '토'];
+const DAYS: DayOfWeek[] = DAYS_OF_WEEK;
 
 interface DirectScheduleFormProps {
   students: Student[];
@@ -33,7 +34,7 @@ export default function DirectScheduleForm({ students, onSubmit, onCancel }: Dir
       const usedDays = newEntries.map(e => e.day);
       const available = DAYS.filter(d => !usedDays.includes(d));
       for (let i = entries.length; i < n; i++) {
-        newEntries.push({ day: available[i - entries.length] || '월', startTime: '14:00' });
+        newEntries.push({ day: available[i - entries.length] || '화', startTime: '14:00' });
       }
       setEntries(newEntries);
     } else {

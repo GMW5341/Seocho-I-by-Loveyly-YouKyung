@@ -204,23 +204,35 @@ export default function ScheduleGrid() {
     }));
   }, [selectedDay]);
 
-  // Compute unified time range across all days
+  // Compute time range — per-day when in day view, unified when in week view
   const timeRange = useMemo(() => {
     let earliest = 24 * 60;
     let latest = 0;
-    DAYS_OF_WEEK.forEach(day => {
-      const hours = getOperatingHours(settings, day);
+
+    if (selectedDay) {
+      // 일별 보기: 해당 요일의 운영 시간만 사용
+      const hours = getOperatingHours(settings, selectedDay);
       if (hours) {
-        earliest = Math.min(earliest, timeToMinutes(hours.start));
-        latest = Math.max(latest, timeToMinutes(hours.end));
+        earliest = timeToMinutes(hours.start);
+        latest = timeToMinutes(hours.end);
       }
-    });
+    } else {
+      // 주간 보기: 모든 요일의 운영 시간 통합
+      DAYS_OF_WEEK.forEach(day => {
+        const hours = getOperatingHours(settings, day);
+        if (hours) {
+          earliest = Math.min(earliest, timeToMinutes(hours.start));
+          latest = Math.max(latest, timeToMinutes(hours.end));
+        }
+      });
+    }
+
     if (earliest >= latest) {
       earliest = 10 * 60;
       latest = 19 * 60;
     }
     return { earliest, latest, totalMinutes: latest - earliest };
-  }, [settings]);
+  }, [settings, selectedDay]);
 
   const totalHeight = timeRange.totalMinutes * PX_PER_MINUTE;
 
@@ -509,52 +521,59 @@ export default function ScheduleGrid() {
     setHoveredCell(null);
   };
 
-  // Delete with undo — for regular slots, permanently remove from payment's regularSchedule
+  // Delete with undo — remove schedule slot and payment's regularSchedule entry
+  const [deletedPaymentInfo, setDeletedPaymentInfo] = useState<{ paymentId: string; entry: { day: DayOfWeek; startTime: string } } | null>(null);
+
   const handleDeleteSlot = (slot: ScheduleSlot, displayName: string) => {
     if (!confirm(`${displayName} 스케줄을 삭제하시겠습니까?`)) return;
+
+    // 결제의 regularSchedule에서도 제거 (정규 슬롯인 경우)
     if (slot.isRegular) {
-      // 결제 기반 정규 슬롯: 결제의 regularSchedule에서 영구 제거
       const payment = payments.find(p =>
         p.studentId === slot.studentId &&
         p.regularSchedule?.some(e => e.day === slot.dayOfWeek && e.startTime === slot.startTime)
       );
       if (payment) {
+        setDeletedPaymentInfo({ paymentId: payment.id, entry: { day: slot.dayOfWeek, startTime: slot.startTime } });
         updatePayment(payment.id, {
           regularSchedule: (payment.regularSchedule || []).filter(
             e => !(e.day === slot.dayOfWeek && e.startTime === slot.startTime)
           ),
         });
+      } else {
+        setDeletedPaymentInfo(null);
       }
     } else {
-      removeSchedule(slot.id);
+      setDeletedPaymentInfo(null);
     }
+
+    // 항상 스케줄 배열에서 제거
+    removeSchedule(slot.id);
     setDeletedSlot(slot);
     if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
-    undoTimeoutRef.current = setTimeout(() => setDeletedSlot(null), 5000);
+    undoTimeoutRef.current = setTimeout(() => { setDeletedSlot(null); setDeletedPaymentInfo(null); }, 5000);
   };
 
   const handleUndo = () => {
     if (deletedSlot) {
-      if (deletedSlot.isRegular) {
-        // 정규 슬롯 삭제 취소: 결제의 regularSchedule에 다시 추가
-        const payment = payments.find(p =>
-          p.studentId === deletedSlot.studentId &&
-          !p.completed && p.remainingSessions > 0
-        ) || payments
-          .filter(p => p.studentId === deletedSlot.studentId && p.regularSchedule?.length)
-          .sort((a, b) => b.paidAt.localeCompare(a.paidAt))[0];
+      // 스케줄 배열에 복원
+      restoreSchedule(deletedSlot);
+
+      // 정규 슬롯이면 결제의 regularSchedule도 복원
+      if (deletedSlot.isRegular && deletedPaymentInfo) {
+        const payment = payments.find(p => p.id === deletedPaymentInfo.paymentId);
         if (payment) {
           updatePayment(payment.id, {
             regularSchedule: [
               ...(payment.regularSchedule || []),
-              { day: deletedSlot.dayOfWeek, startTime: deletedSlot.startTime },
+              deletedPaymentInfo.entry,
             ],
           });
         }
-      } else {
-        restoreSchedule(deletedSlot);
       }
+
       setDeletedSlot(null);
+      setDeletedPaymentInfo(null);
       if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
     }
   };
@@ -1027,10 +1046,8 @@ export default function ScheduleGrid() {
                       );
                     }
 
-                    // Accent bar color
-                    const accentColor = slot.isUnpaid
-                      ? 'bg-red-500'
-                      : isTrial
+                    // Accent bar color (미결제도 수업 시간별 컬러 유지)
+                    const accentColor = isTrial
                       ? 'bg-emerald-500'
                       : !slot.isRegular && !isTrial
                       ? 'bg-orange-400'
@@ -1048,9 +1065,7 @@ export default function ScheduleGrid() {
                           schedule-block
                           absolute z-10 rounded-lg cursor-grab active:cursor-grabbing
                           border select-none group/card overflow-hidden
-                          ${slot.isUnpaid
-                            ? 'bg-red-50 border-red-300 border-dashed'
-                            : isTrial
+                          ${isTrial
                             ? 'bg-emerald-50 border-emerald-300'
                             : isAbsent
                             ? 'bg-red-50 border-red-300'
@@ -1080,7 +1095,7 @@ export default function ScheduleGrid() {
                           </div>
 
                           {/* Time row */}
-                          <div className={`tabular-nums leading-tight ${isDayView ? 'text-xs mt-0.5' : 'text-[10px]'} ${isTrial ? 'text-emerald-600' : slot.isUnpaid ? 'text-red-500' : durationText}`}>
+                          <div className={`tabular-nums leading-tight ${isDayView ? 'text-xs mt-0.5' : 'text-[10px]'} ${isTrial ? 'text-emerald-600' : durationText}`}>
                             {slot.startTime}~{endTime}
                           </div>
 
@@ -1092,7 +1107,7 @@ export default function ScheduleGrid() {
                           </div>
 
                           {/* Status badges */}
-                          {(isTrial || (!slot.isRegular && !isTrial) || slot.isUnpaid) && (
+                          {(isTrial || (!slot.isRegular && !isTrial && !slot.isUnpaid)) && (
                             <div className={`flex items-center gap-1 ${isDayView ? 'mt-1' : 'mt-0.5'}`}>
                               {isTrial && (
                                 <span className={`inline-block bg-emerald-500 text-white font-bold rounded-full leading-none ${isDayView ? 'px-2 py-0.5 text-[10px]' : 'px-1 py-px text-[8px]'}`}>
@@ -1104,11 +1119,15 @@ export default function ScheduleGrid() {
                                   보강
                                 </span>
                               )}
-                              {slot.isUnpaid && (
-                                <span className={`inline-block bg-red-500 text-white font-bold rounded-full leading-none ${isDayView ? 'px-2 py-0.5 text-[10px]' : 'px-1 py-px text-[8px]'}`}>
-                                  미결제
-                                </span>
-                              )}
+                            </div>
+                          )}
+
+                          {/* 미결제 뱃지 - 오른쪽에 세로 표시 */}
+                          {slot.isUnpaid && (
+                            <div className={`absolute right-0 top-0 bottom-0 flex items-center ${isDayView ? 'pr-1.5' : 'pr-1'}`}>
+                              <span className={`bg-red-500 text-white font-bold rounded-sm leading-none ${isDayView ? 'px-1 py-1 text-[9px]' : 'px-0.5 py-0.5 text-[7px]'}`} style={{ writingMode: 'vertical-rl' }}>
+                                미결제
+                              </span>
                             </div>
                           )}
 

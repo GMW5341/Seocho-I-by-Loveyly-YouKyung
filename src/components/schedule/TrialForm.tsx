@@ -47,10 +47,11 @@ export default function TrialForm({ initialData, onSubmit, onCancel }: TrialForm
   const jsDay = getDay(parseISO(date)); // 0=Sun, 1=Mon, ...
   const dayOfWeek: DayOfWeek | null = DAY_MAP[jsDay] || null;
   const isSunday = jsDay === 0;
+  const isMonday = jsDay === 1;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !dayOfWeek) return;
+    if (!name.trim() || !dayOfWeek || isMonday || isSunday) return;
     onSubmit({ name: name.trim(), grade, parentPhone, memo, date, dayOfWeek, startTime, duration });
   };
 
@@ -112,8 +113,8 @@ export default function TrialForm({ initialData, onSubmit, onCancel }: TrialForm
           {dayOfWeek && (
             <p className="text-xs text-gray-500 mt-1">{dayOfWeek}요일</p>
           )}
-          {isSunday && (
-            <p className="text-xs text-red-500 mt-1">일요일은 수업이 없습니다.</p>
+          {(isSunday || isMonday) && (
+            <p className="text-xs text-red-500 mt-1">{isSunday ? '일' : '월'}요일은 수업이 없습니다.</p>
           )}
         </div>
         <div>
