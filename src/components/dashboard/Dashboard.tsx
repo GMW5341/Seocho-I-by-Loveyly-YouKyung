@@ -3,7 +3,7 @@ import { format, parseISO, startOfMonth, endOfMonth, subMonths, isWithinInterval
 import { ko } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { useAppStore } from '../../store/StoreContext';
-import { formatCurrency, getDayOfWeekFromDate, expandHolidayDates } from '../../utils/helpers';
+import { formatCurrency, getDayOfWeekFromDate, expandHolidayDates, calculateLastClassDate } from '../../utils/helpers';
 import Badge from '../common/Badge';
 const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
 
@@ -42,7 +42,7 @@ const DAILY_QUOTES = [
 ];
 
 export default function Dashboard() {
-  const { students, payments, attendance, holidays } = useAppStore();
+  const { students, payments, attendance, holidays, schedules, trialStudents } = useAppStore();
   const activeStudents = useMemo(() => students.filter(s => s.active), [students]);
 
   // Check if today is a holiday
@@ -60,36 +60,85 @@ export default function Dashboard() {
     return null;
   }, [holidays, todayStr]);
 
-  // Today's schedule - derived from active payments (+ unpaid fallback)
+  // 결제별 마지막 수업일 계산 (날짜 범위 필터링용)
+  const paymentEndDateMap = useMemo(() => {
+    const map = new Map<string, string | null>();
+    const hDates = expandHolidayDates(holidays);
+    for (const p of payments) {
+      if (p.completed) {
+        map.set(p.id, null);
+      } else if (p.startDate && p.regularSchedule?.length) {
+        const endDate = calculateLastClassDate(
+          p.startDate, p.totalSessions, p.regularSchedule, hDates,
+          attendance.filter(a => a.studentId === p.studentId)
+        );
+        map.set(p.id, endDate);
+      }
+    }
+    return map;
+  }, [payments, holidays, attendance]);
+
+  // Today's schedule - 스케줄 관리의 실시간 데이터 기반
   const todaySchedule = useMemo(() => {
     if (isTodayHoliday) return [];
-    const today = new Date();
-    const dayOfWeek = getDayOfWeekFromDate(format(today, 'yyyy-MM-dd'));
+    const dayOfWeek = getDayOfWeekFromDate(todayStr);
     if (!dayOfWeek) return [];
-    const slots: { id: string; studentId: string; startTime: string; duration: number; isRegular: boolean; isUnpaid?: boolean; student?: typeof activeStudents[0] }[] = [];
-    activeStudents.forEach(student => {
-      const activePayment = payments.find(p => p.studentId === student.id && !p.completed && p.remainingSessions > 0);
-      const payment = activePayment || payments
-        .filter(p => p.studentId === student.id && p.completed && p.regularSchedule?.length)
-        .sort((a, b) => b.paidAt.localeCompare(a.paidAt))[0];
-      if (payment?.regularSchedule?.length) {
-        payment.regularSchedule
-          .filter(entry => entry.day === dayOfWeek)
-          .forEach((entry, i) => {
-            slots.push({
-              id: `today-${payment.id}-${i}`,
-              studentId: student.id,
-              startTime: entry.startTime,
-              duration: payment.classDuration,
-              isRegular: true,
-              isUnpaid: !activePayment,
-              student,
-            });
-          });
-      }
+
+    // 오늘 날짜에 숨김 처리된 슬롯
+    const hiddenOverrides = schedules.filter(s =>
+      s.isOverrideHidden && s.date === todayStr
+    );
+
+    // 미결제 학생 ID 집합
+    const unpaidStudentIds = new Set<string>();
+    schedules.filter(s => s.isRegular && !s.isOverrideHidden).forEach(s => {
+      const hasActive = payments.some(p => p.studentId === s.studentId && !p.completed && p.remainingSessions > 0);
+      if (!hasActive) unpaidStudentIds.add(s.studentId);
     });
-    return slots.sort((a, b) => a.startTime.localeCompare(b.startTime));
-  }, [activeStudents, payments, isTodayHoliday]);
+
+    const filtered = schedules.filter(s => {
+      if (s.isOverrideHidden) return false;
+
+      if (s.isRegular) {
+        if (s.dayOfWeek !== dayOfWeek) return false;
+        // 숨김 처리 확인
+        const isHidden = hiddenOverrides.some(h =>
+          h.studentId === s.studentId && h.dayOfWeek === s.dayOfWeek && h.startTime === s.startTime
+        );
+        if (isHidden) return false;
+        // 활성 학생만
+        if (!activeStudents.some(st => st.id === s.studentId)) return false;
+        // 날짜 범위 필터링
+        if (s.linkedPaymentId) {
+          if (s.startDate && s.startDate > todayStr) return false;
+          const endDate = paymentEndDateMap.get(s.linkedPaymentId);
+          if (endDate === null) return false;
+          if (endDate && endDate < todayStr) return false;
+        }
+        return true;
+      }
+
+      // 날짜 지정 슬롯 (보강, 체험 등): 오늘 날짜만
+      if (s.date) return s.date === todayStr;
+      return false;
+    });
+
+    return filtered.map(s => {
+      const student = activeStudents.find(st => st.id === s.studentId);
+      const trialStudent = s.isTrial && s.trialStudentId ? trialStudents.find(t => t.id === s.trialStudentId) : null;
+      return {
+        id: s.id,
+        studentId: s.studentId,
+        startTime: s.startTime,
+        duration: s.duration,
+        isRegular: s.isRegular,
+        isTrial: !!s.isTrial,
+        isUnpaid: s.isRegular && unpaidStudentIds.has(s.studentId),
+        student,
+        displayName: s.isTrial && trialStudent ? `${trialStudent.name} (체험)` : student?.name || '(알 수 없음)',
+      };
+    }).sort((a, b) => a.startTime.localeCompare(b.startTime));
+  }, [schedules, activeStudents, payments, trialStudents, isTodayHoliday, todayStr, paymentEndDateMap]);
 
   // Monthly revenue chart data (last 6 months)
   const revenueChartData = useMemo(() => {
@@ -377,14 +426,15 @@ export default function Dashboard() {
                 <div className="text-xs text-red-400 mt-1">오늘은 공휴일/휴원일입니다</div>
               </div>
             ) : todaySchedule.length > 0 ? todaySchedule.map(slot => (
-              <div key={slot.id} className={`flex items-center gap-3 p-2 rounded-lg ${slot.isUnpaid ? 'bg-red-50 border border-red-200' : 'bg-gray-50'}`}>
+              <div key={slot.id} className={`flex items-center gap-3 p-2 rounded-lg ${slot.isUnpaid ? 'bg-red-50 border border-red-200' : slot.isTrial ? 'bg-emerald-50 border border-emerald-200' : 'bg-gray-50'}`}>
                 <div className="text-xs font-mono text-gray-500 w-12">{slot.startTime}</div>
                 <div className="flex-1">
-                  <div className="text-sm font-medium text-gray-800">{slot.student?.name}</div>
-                  <div className="text-xs text-gray-500">{slot.student?.level} | {slot.duration}분</div>
+                  <div className="text-sm font-medium text-gray-800">{slot.displayName}</div>
+                  <div className="text-xs text-gray-500">{slot.student?.level ? `${slot.student.level} | ` : ''}{slot.duration}분</div>
                 </div>
+                {slot.isTrial && <Badge variant="success">체험</Badge>}
                 {slot.isUnpaid && <Badge variant="danger">미결제</Badge>}
-                {!slot.isRegular && !slot.isUnpaid && <Badge variant="warning">보강</Badge>}
+                {!slot.isRegular && !slot.isUnpaid && !slot.isTrial && <Badge variant="warning">보강</Badge>}
               </div>
             )) : (
               <div className="text-sm text-gray-400 text-center py-8">오늘은 수업이 없습니다</div>
