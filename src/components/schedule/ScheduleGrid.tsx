@@ -25,7 +25,7 @@ import TrialForm from './TrialForm';
 import DirectScheduleForm from './DirectScheduleForm';
 
 const PX_PER_MINUTE_WEEK = 2.5;
-const PX_PER_MINUTE_DAY = 4;
+const PX_PER_MINUTE_DAY = 5;
 
 const STATUS_COLORS: Record<AttendanceStatus, string> = {
   '출석': 'ring-2 ring-green-500',
@@ -910,8 +910,8 @@ export default function ScheduleGrid() {
                     className="absolute left-0 right-0 px-1.5 -translate-y-1/2 flex items-baseline gap-0.5"
                     style={{ top }}
                   >
-                    <span className={`font-semibold text-gray-600 tabular-nums tracking-tight ${selectedDay ? 'text-[14px]' : 'text-[12px]'}`}>{h}</span>
-                    <span className={`text-gray-400 ${selectedDay ? 'text-[12px]' : 'text-[10px]'}`}>:{m}</span>
+                    <span className={`font-semibold text-gray-600 tabular-nums tracking-tight ${selectedDay ? 'text-base' : 'text-[12px]'}`}>{h}</span>
+                    <span className={`text-gray-400 ${selectedDay ? 'text-sm' : 'text-[10px]'}`}>:{m}</span>
                   </div>
                 );
               })}
@@ -1027,17 +1027,17 @@ export default function ScheduleGrid() {
                             width: `calc(${widthPercent}% - 4px)`,
                           }}
                         >
-                          <div className={`absolute left-0 top-0 bottom-0 ${isDayView ? 'w-1' : 'w-0.5'} bg-rose-500`} />
+                          <div className={`absolute left-0 top-0 bottom-0 ${isDayView ? 'w-1.5' : 'w-0.5'} bg-rose-500`} />
                           <div className={isDayView ? 'pl-3.5 pr-2 py-2' : 'pl-2 pr-1 py-1'}>
-                            <div className={`font-bold truncate text-rose-800 leading-tight ${isDayView ? 'text-sm' : 'text-[11px]'}`}>
+                            <div className={`font-bold truncate text-rose-800 leading-tight ${isDayView ? 'text-lg' : 'text-[11px]'}`}>
                               {displayName}
                             </div>
-                            <div className={`text-rose-600 tabular-nums leading-tight ${isDayView ? 'text-xs mt-0.5' : 'text-[10px]'}`}>{slot.startTime}~{endTime}</div>
-                            <div className={`flex items-center gap-1 leading-tight ${isDayView ? 'text-xs mt-0.5' : 'text-[10px]'}`}>
+                            <div className={`text-rose-600 tabular-nums leading-tight ${isDayView ? 'text-base mt-0.5' : 'text-[10px]'}`}>{slot.startTime}~{endTime}</div>
+                            <div className={`flex items-center gap-1 leading-tight ${isDayView ? 'text-sm mt-0.5' : 'text-[10px]'}`}>
                               <span className="text-rose-500">{slot.duration}분</span>
                             </div>
                             <div className={isDayView ? 'mt-1' : 'mt-0.5'}>
-                              <span className={`inline-block bg-rose-500 text-white font-bold rounded-full leading-none ${isDayView ? 'px-2 py-0.5 text-[10px]' : 'px-1 py-px text-[8px]'}`}>
+                              <span className={`inline-block bg-rose-500 text-white font-bold rounded-full leading-none ${isDayView ? 'px-2.5 py-1 text-xs' : 'px-1 py-px text-[8px]'}`}>
                                 특강 {slot.specialClassStudentCount || 0}명
                               </span>
                             </div>
@@ -1084,23 +1084,23 @@ export default function ScheduleGrid() {
                         }}
                       >
                         {/* Left accent bar */}
-                        <div className={`absolute left-0 top-0 bottom-0 ${isDayView ? 'w-1' : 'w-0.5'} ${accentColor}`} />
+                        <div className={`absolute left-0 top-0 bottom-0 ${isDayView ? 'w-1.5' : 'w-0.5'} ${accentColor}`} />
 
                         {/* Content area */}
-                        <div className={isDayView ? 'pl-2.5' : 'pl-1.5'}>
+                        <div className={isDayView ? 'pl-3.5 pr-2 py-1' : 'pl-1.5'}>
                           {/* Name row */}
-                          <div className={`font-bold truncate leading-tight ${isDayView ? 'text-sm' : 'text-[11px]'} ${isAbsent ? 'text-red-600 line-through' : 'text-gray-900'}`}>
+                          <div className={`font-bold truncate leading-tight ${isDayView ? 'text-lg' : 'text-[11px]'} ${isAbsent ? 'text-red-600 line-through' : 'text-gray-900'}`}>
                             {displayName}
-                            {isDayView && student && <span className="font-normal text-gray-400 ml-1 text-xs">({student.grade})</span>}
+                            {isDayView && student && <span className="font-normal text-gray-400 ml-1 text-sm">({student.grade})</span>}
                           </div>
 
                           {/* Time row */}
-                          <div className={`tabular-nums leading-tight ${isDayView ? 'text-xs mt-0.5' : 'text-[10px]'} ${isTrial ? 'text-emerald-600' : durationText}`}>
+                          <div className={`tabular-nums leading-tight ${isDayView ? 'text-base mt-0.5' : 'text-[10px]'} ${isTrial ? 'text-emerald-600' : durationText}`}>
                             {slot.startTime}~{endTime}
                           </div>
 
                           {/* Info row */}
-                          <div className={`flex items-center gap-1 leading-tight ${isDayView ? 'text-xs mt-0.5' : 'text-[10px]'}`}>
+                          <div className={`flex items-center gap-1 leading-tight ${isDayView ? 'text-sm mt-0.5' : 'text-[10px]'}`}>
                             <span className="text-gray-500">{slot.duration}분</span>
                             {isDayView && student && <span className="text-gray-400">|</span>}
                             {isDayView && student && <span className="text-gray-500">{student.level}</span>}
@@ -1110,12 +1110,12 @@ export default function ScheduleGrid() {
                           {(isTrial || (!slot.isRegular && !isTrial && !slot.isUnpaid)) && (
                             <div className={`flex items-center gap-1 ${isDayView ? 'mt-1' : 'mt-0.5'}`}>
                               {isTrial && (
-                                <span className={`inline-block bg-emerald-500 text-white font-bold rounded-full leading-none ${isDayView ? 'px-2 py-0.5 text-[10px]' : 'px-1 py-px text-[8px]'}`}>
+                                <span className={`inline-block bg-emerald-500 text-white font-bold rounded-full leading-none ${isDayView ? 'px-2.5 py-1 text-xs' : 'px-1 py-px text-[8px]'}`}>
                                   체험
                                 </span>
                               )}
                               {!slot.isRegular && !isTrial && !slot.isUnpaid && (
-                                <span className={`inline-block bg-orange-400 text-white font-bold rounded-full leading-none ${isDayView ? 'px-2 py-0.5 text-[10px]' : 'px-1 py-px text-[8px]'}`}>
+                                <span className={`inline-block bg-orange-400 text-white font-bold rounded-full leading-none ${isDayView ? 'px-2.5 py-1 text-xs' : 'px-1 py-px text-[8px]'}`}>
                                   보강
                                 </span>
                               )}
@@ -1125,7 +1125,7 @@ export default function ScheduleGrid() {
                           {/* 미결제 뱃지 - 오른쪽에 세로 표시 */}
                           {slot.isUnpaid && (
                             <div className={`absolute right-0 top-0 bottom-0 flex items-center ${isDayView ? 'pr-1.5' : 'pr-1'}`}>
-                              <span className={`bg-red-500 text-white font-bold rounded-sm leading-none ${isDayView ? 'px-1 py-1 text-[9px]' : 'px-0.5 py-0.5 text-[7px]'}`} style={{ writingMode: 'vertical-rl' }}>
+                              <span className={`bg-red-500 text-white font-bold rounded-sm leading-none ${isDayView ? 'px-1.5 py-1.5 text-xs' : 'px-0.5 py-0.5 text-[7px]'}`} style={{ writingMode: 'vertical-rl' }}>
                                 미결제
                               </span>
                             </div>
@@ -1143,7 +1143,7 @@ export default function ScheduleGrid() {
                           {/* Attendance status badge */}
                           {attendanceRecord && (
                             <div className={`${isDayView ? 'mt-1' : 'mt-0.5'}`}>
-                              <span className={`inline-block font-bold rounded-full leading-none ${isDayView ? 'px-2 py-0.5 text-[10px]' : 'px-1 py-px text-[8px]'} ${
+                              <span className={`inline-block font-bold rounded-full leading-none ${isDayView ? 'px-2.5 py-1 text-xs' : 'px-1 py-px text-[8px]'} ${
                                 attendanceRecord.status === '출석' ? 'bg-green-100 text-green-700'
                                 : attendanceRecord.status === '결석' ? 'bg-red-100 text-red-600'
                                 : 'bg-blue-100 text-blue-700'
