@@ -42,56 +42,62 @@
     box-shadow: none !important;
   }
 
-  /* ── Print-specific: 이름을 박스 상단 대부분 차지하도록 확대 ── */
-  #schedule-print-wrapper .schedule-block > div:last-of-type {
-    padding: 6px 8px 4px 14px !important;
+  /* ── Print-specific: 이름이 박스를 꽉 채우도록 ── */
+  #schedule-print-wrapper .schedule-block {
+    overflow: visible !important;
   }
 
-  /* 이름: 박스의 주인공 — 매우 크고 굵게 */
+  #schedule-print-wrapper .schedule-block > div:last-of-type {
+    padding: 2px 6px 1px 10px !important;
+  }
+
+  /* 이름: 블록의 주인공 — 최대한 크게, 박스 상단 대부분 차지 */
   #schedule-print-wrapper .schedule-block > div:last-of-type > div:first-child {
-    font-size: 28px !important;
-    font-weight: 800 !important;
-    line-height: 1.15 !important;
-    letter-spacing: -0.02em !important;
-    margin-bottom: 2px !important;
+    font-size: 2.2em !important;
+    font-weight: 900 !important;
+    line-height: 1.1 !important;
+    letter-spacing: -0.03em !important;
+    margin-bottom: 0 !important;
+    white-space: nowrap !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
   }
 
   /* 이름 옆 학년 표시 */
   #schedule-print-wrapper .schedule-block > div:last-of-type > div:first-child span {
-    font-size: 16px !important;
+    font-size: 0.5em !important;
     font-weight: 500 !important;
   }
 
-  /* 시간: 두 번째로 눈에 띄게 */
+  /* 시간 */
   #schedule-print-wrapper .schedule-block > div:last-of-type > div:nth-child(2) {
-    font-size: 20px !important;
+    font-size: 1.3em !important;
     font-weight: 700 !important;
-    line-height: 1.2 !important;
+    line-height: 1.1 !important;
+    margin-top: 0 !important;
   }
 
   /* 수업 정보 (분/레벨) */
   #schedule-print-wrapper .schedule-block > div:last-of-type > div:nth-child(3) {
-    font-size: 16px !important;
+    font-size: 1em !important;
     font-weight: 600 !important;
-    line-height: 1.2 !important;
+    line-height: 1.1 !important;
+    margin-top: 0 !important;
   }
 
-  /* 뱃지류 (체험/보강/출석/특강 등) */
-  #schedule-print-wrapper .schedule-block span[class*="rounded-full"] {
-    font-size: 14px !important;
-    padding: 3px 10px !important;
-    font-weight: 700 !important;
+  /* 뱃지류 — 인쇄 시 숨김 (공간 절약하여 이름에 더 할당) */
+  #schedule-print-wrapper .schedule-block > div:last-of-type > div:nth-child(n+4) {
+    display: none !important;
   }
 
-  /* 미결제 세로 뱃지 */
-  #schedule-print-wrapper .schedule-block span[style*="vertical"] {
-    font-size: 14px !important;
-    padding: 4px 5px !important;
+  /* 미결제 세로 뱃지는 유지 (absolute 위치) */
+  #schedule-print-wrapper .schedule-block > div:last-of-type > div.absolute {
+    display: flex !important;
   }
 
   /* 왼쪽 악센트 바 더 두껍게 */
   #schedule-print-wrapper .schedule-block > div:first-child {
-    width: 6px !important;
+    width: 5px !important;
   }
 
   /* Page setup */

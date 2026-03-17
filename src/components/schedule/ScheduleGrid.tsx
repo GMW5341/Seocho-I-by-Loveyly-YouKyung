@@ -174,21 +174,6 @@ export default function ScheduleGrid() {
     const innerClone = clone.firstElementChild as HTMLElement | null;
     if (innerClone) innerClone.style.cssText = 'overflow:visible; min-width:0;';
 
-    // 1.5. Scale up block heights for print so text has room
-    // Multiply all px-based top/height on schedule blocks and their containers
-    const PRINT_SCALE = 1.5;
-    // Scale the day column + time column containers
-    clone.querySelectorAll<HTMLElement>('[style]').forEach(node => {
-      const h = node.style.height;
-      const t = node.style.top;
-      if (h && h.endsWith('px')) {
-        node.style.height = (parseFloat(h) * PRINT_SCALE) + 'px';
-      }
-      if (t && t.endsWith('px')) {
-        node.style.top = (parseFloat(t) * PRINT_SCALE) + 'px';
-      }
-    });
-
     // 2. Create a wrapper in normal document flow (NOT position:absolute)
     const wrapper = document.createElement('div');
     wrapper.id = 'schedule-print-wrapper';
