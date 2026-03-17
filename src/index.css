@@ -46,8 +46,8 @@
 
   /* 이름 */
   #schedule-print-wrapper .schedule-block .text-2xl {
-    font-size: 32px !important;
-    font-weight: 900 !important;
+    font-size: 30px !important;
+    font-weight: 700 !important;
     line-height: 1.1 !important;
     letter-spacing: 0.15em !important;
   }
