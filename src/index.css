@@ -45,44 +45,53 @@
   /* ── Print-specific: 이름이 박스를 꽉 채우도록 ── */
   #schedule-print-wrapper .schedule-block {
     overflow: visible !important;
+    font-size: 32px !important;
   }
 
   #schedule-print-wrapper .schedule-block > div:last-of-type {
-    padding: 2px 6px 1px 10px !important;
+    padding: 1px 4px 0 8px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    height: 100% !important;
+    box-sizing: border-box !important;
   }
 
-  /* 이름: 블록의 주인공 — 최대한 크게, 박스 상단 대부분 차지 */
+  /* 이름: 블록의 주인공 — 박스 높이에 맞춰 최대한 크게 */
   #schedule-print-wrapper .schedule-block > div:last-of-type > div:first-child {
-    font-size: 2.2em !important;
+    font-size: 1.3em !important;
     font-weight: 900 !important;
-    line-height: 1.1 !important;
+    line-height: 1.05 !important;
     letter-spacing: -0.03em !important;
-    margin-bottom: 0 !important;
+    margin: 0 !important;
     white-space: nowrap !important;
     overflow: visible !important;
     text-overflow: clip !important;
+    flex-shrink: 0 !important;
   }
 
   /* 이름 옆 학년 표시 */
   #schedule-print-wrapper .schedule-block > div:last-of-type > div:first-child span {
-    font-size: 0.5em !important;
+    font-size: 0.45em !important;
     font-weight: 500 !important;
   }
 
   /* 시간 */
   #schedule-print-wrapper .schedule-block > div:last-of-type > div:nth-child(2) {
-    font-size: 1.3em !important;
+    font-size: 0.75em !important;
     font-weight: 700 !important;
-    line-height: 1.1 !important;
-    margin-top: 0 !important;
+    line-height: 1.05 !important;
+    margin: 0 !important;
+    flex-shrink: 0 !important;
   }
 
   /* 수업 정보 (분/레벨) */
   #schedule-print-wrapper .schedule-block > div:last-of-type > div:nth-child(3) {
-    font-size: 1em !important;
+    font-size: 0.55em !important;
     font-weight: 600 !important;
-    line-height: 1.1 !important;
-    margin-top: 0 !important;
+    line-height: 1.05 !important;
+    margin: 0 !important;
+    flex-shrink: 0 !important;
   }
 
   /* 뱃지류 — 인쇄 시 숨김 (공간 절약하여 이름에 더 할당) */
@@ -95,7 +104,7 @@
     display: flex !important;
   }
 
-  /* 왼쪽 악센트 바 더 두껍게 */
+  /* 왼쪽 악센트 바 */
   #schedule-print-wrapper .schedule-block > div:first-child {
     width: 5px !important;
   }
