@@ -42,6 +42,58 @@
     box-shadow: none !important;
   }
 
+  /* ── Print-specific: 이름을 박스 상단 대부분 차지하도록 확대 ── */
+  #schedule-print-wrapper .schedule-block > div:last-of-type {
+    padding: 6px 8px 4px 14px !important;
+  }
+
+  /* 이름: 박스의 주인공 — 매우 크고 굵게 */
+  #schedule-print-wrapper .schedule-block > div:last-of-type > div:first-child {
+    font-size: 28px !important;
+    font-weight: 800 !important;
+    line-height: 1.15 !important;
+    letter-spacing: -0.02em !important;
+    margin-bottom: 2px !important;
+  }
+
+  /* 이름 옆 학년 표시 */
+  #schedule-print-wrapper .schedule-block > div:last-of-type > div:first-child span {
+    font-size: 16px !important;
+    font-weight: 500 !important;
+  }
+
+  /* 시간: 두 번째로 눈에 띄게 */
+  #schedule-print-wrapper .schedule-block > div:last-of-type > div:nth-child(2) {
+    font-size: 20px !important;
+    font-weight: 700 !important;
+    line-height: 1.2 !important;
+  }
+
+  /* 수업 정보 (분/레벨) */
+  #schedule-print-wrapper .schedule-block > div:last-of-type > div:nth-child(3) {
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    line-height: 1.2 !important;
+  }
+
+  /* 뱃지류 (체험/보강/출석/특강 등) */
+  #schedule-print-wrapper .schedule-block span[class*="rounded-full"] {
+    font-size: 14px !important;
+    padding: 3px 10px !important;
+    font-weight: 700 !important;
+  }
+
+  /* 미결제 세로 뱃지 */
+  #schedule-print-wrapper .schedule-block span[style*="vertical"] {
+    font-size: 14px !important;
+    padding: 4px 5px !important;
+  }
+
+  /* 왼쪽 악센트 바 더 두껍게 */
+  #schedule-print-wrapper .schedule-block > div:first-child {
+    width: 6px !important;
+  }
+
   /* Page setup */
   @page {
     size: A4 portrait;
