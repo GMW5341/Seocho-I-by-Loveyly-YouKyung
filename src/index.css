@@ -46,10 +46,10 @@
 
   /* 이름 */
   #schedule-print-wrapper .schedule-block .text-2xl {
-    font-size: 42px !important;
+    font-size: 32px !important;
     font-weight: 900 !important;
     line-height: 1.1 !important;
-    letter-spacing: -0.02em !important;
+    letter-spacing: 0.15em !important;
   }
   /* 이름 옆 학년 */
   #schedule-print-wrapper .schedule-block .text-2xl > span {
