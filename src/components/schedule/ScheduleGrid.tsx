@@ -58,7 +58,7 @@ export default function ScheduleGrid() {
     moveSchedule, updateSchedule, removeSchedule, restoreSchedule, addSchedule,
     addTrialStudent, addTrialLesson,
     addAttendance, updateAttendance, deleteAttendance,
-    addPayment, updatePayment,
+    addPayment, updatePayment, deleteStudent,
     specialClasses, specialClassStudents,
   } = useAppStore();
   const [showMakeupForm, setShowMakeupForm] = useState(false);
@@ -261,12 +261,12 @@ export default function ScheduleGrid() {
   }, [schedules, payments]);
 
   // Compute projected end dates for payments (for date-range filtering)
+  const holidayDates = useMemo(() => expandHolidayDates(holidays), [holidays]);
+
   const paymentEndDateMap = useMemo(() => {
     const map = new Map<string, string | null>();
-    const holidayDates = expandHolidayDates(holidays);
     for (const p of payments) {
       if (p.completed) {
-        // 완료된 결제: null → 스케줄 표시 안 함
         map.set(p.id, null);
       } else if (p.startDate && p.regularSchedule?.length) {
         const endDate = calculateLastClassDate(
@@ -280,7 +280,36 @@ export default function ScheduleGrid() {
       }
     }
     return map;
-  }, [payments, holidays, attendance]);
+  }, [payments, holidayDates, attendance]);
+
+  // Compute end dates for direct (unlinked) schedule slots with totalSessions
+  const directEndDateMap = useMemo(() => {
+    const map = new Map<string, string | null>();
+    // Group direct slots by studentId to build regularSchedule
+    const directSlotsByStudent = new Map<string, typeof schedules>();
+    for (const s of schedules) {
+      if (s.isRegular && !s.linkedPaymentId && s.source === 'direct' && s.startDate && s.totalSessions) {
+        if (!directSlotsByStudent.has(s.studentId)) directSlotsByStudent.set(s.studentId, []);
+        directSlotsByStudent.get(s.studentId)!.push(s);
+      }
+    }
+    directSlotsByStudent.forEach((slots, studentId) => {
+      const regularSchedule = slots.map(s => ({ day: s.dayOfWeek, startTime: s.startTime }));
+      const startDate = slots[0].startDate!;
+      const totalSessions = slots[0].totalSessions!;
+      const endDate = calculateLastClassDate(
+        startDate,
+        totalSessions,
+        regularSchedule,
+        holidayDates,
+        attendance.filter(a => a.studentId === studentId)
+      );
+      for (const s of slots) {
+        map.set(s.id, endDate);
+      }
+    });
+    return map;
+  }, [schedules, holidayDates, attendance]);
 
   // Read independent schedule slots directly (no longer derived from payments)
   const filteredSchedules = useMemo(() => {
@@ -307,14 +336,15 @@ export default function ScheduleGrid() {
         if (!activeStudents.some(st => st.id === s.studentId)) return false;
 
         // 날짜 범위 필터링: startDate ~ 마지막 수업일
-        if (s.linkedPaymentId) {
-          const startDate = s.startDate;
-          if (startDate && startDate > wkEnd) return false; // 시작일이 아직 안 됨
+        if (s.startDate && s.startDate > wkEnd) return false; // 시작일이 아직 안 됨
 
+        if (s.linkedPaymentId) {
           const endDate = paymentEndDateMap.get(s.linkedPaymentId);
-          // endDate가 null이면 완료된 결제 → 표시 안 함
-          if (endDate === null) return false;
-          // endDate가 있고 이번 주 시작보다 이전이면 이미 끝남
+          if (endDate === null) return false; // 완료된 결제 → 표시 안 함
+          if (endDate && endDate < wkStart) return false; // 이미 끝남
+        } else if (s.source === 'direct' && s.totalSessions) {
+          // 직접 입력 슬롯도 기간 제한 적용
+          const endDate = directEndDateMap.get(s.id);
           if (endDate && endDate < wkStart) return false;
         }
 
@@ -328,7 +358,7 @@ export default function ScheduleGrid() {
 
       return true;
     });
-  }, [schedules, currentWeekStart, weekEnd, activeStudents, paymentEndDateMap]);
+  }, [schedules, currentWeekStart, weekEnd, activeStudents, paymentEndDateMap, directEndDateMap]);
 
   // Generate virtual slots for active special classes
   const specialClassSlots = useMemo(() => {
@@ -403,18 +433,24 @@ export default function ScheduleGrid() {
     const startMin = timeToMinutes(time);
     const endMin = startMin + slot.duration;
     if (startMin < timeToMinutes(hours.start) || endMin > timeToMinutes(hours.end)) return false;
-    const existingSlots = schedules.filter(s => {
+    // Use filteredSchedules (visible slots only) + specialClassSlots for accurate capacity count
+    const visibleSlots = [...filteredSchedules, ...specialClassSlots];
+    const existingSlots = visibleSlots.filter(s => {
       if (s.id === slot.id) return false;
       if (s.dayOfWeek !== day) return false;
       return isTimeOverlapping(s.startTime, s.duration, time, slot.duration);
     });
     return existingSlots.length < settings.maxStudentsPerSlot;
-  }, [settings, schedules]);
+  }, [settings, filteredSchedules, specialClassSlots]);
 
   // 직접 스케줄 입력 핸들러
-  const handleAddDirectSchedule = (data: { studentId: string; dayOfWeek: DayOfWeek; startTime: string; duration: ClassDuration; sessionsPerWeek: number; entries: { day: DayOfWeek; startTime: string }[]; startDate?: string }) => {
+  const [directScheduleToast, setDirectScheduleToast] = useState<string | null>(null);
+
+  const handleAddDirectSchedule = (data: { studentId: string; dayOfWeek: DayOfWeek; startTime: string; duration: ClassDuration; sessionsPerWeek: number; entries: { day: DayOfWeek; startTime: string }[]; startDate?: string; totalSessions?: number }) => {
+    // 기존 스케줄 슬롯 추가
+    const newSlotIds: string[] = [];
     for (const entry of data.entries) {
-      addSchedule({
+      const slot = addSchedule({
         studentId: data.studentId,
         dayOfWeek: entry.day,
         startTime: entry.startTime,
@@ -422,8 +458,39 @@ export default function ScheduleGrid() {
         isRegular: true,
         source: 'direct',
         startDate: data.startDate,
+        totalSessions: data.totalSessions,
       });
+      newSlotIds.push(slot.id);
     }
+
+    // Issue 2: 결제 자동 연동 - 같은 학생의 활성 결제 찾기
+    const activePayment = payments.find(p =>
+      p.studentId === data.studentId && !p.completed && p.remainingSessions > 0
+    );
+
+    if (activePayment) {
+      // 결제가 있으면: 결제의 regularSchedule/startDate 업데이트 + 슬롯에 linkedPaymentId 연결
+      updatePayment(activePayment.id, {
+        regularSchedule: data.entries.map(e => ({ day: e.day, startTime: e.startTime })),
+        startDate: data.startDate || activePayment.startDate,
+        totalSessions: data.totalSessions || activePayment.totalSessions,
+        classDuration: data.duration,
+        sessionsPerWeek: data.sessionsPerWeek,
+      });
+      // 새로 추가한 슬롯들에 linkedPaymentId 설정
+      for (const slotId of newSlotIds) {
+        updateSchedule(slotId, {
+          linkedPaymentId: activePayment.id,
+          source: 'payment',
+        });
+      }
+    } else {
+      // 결제가 없으면: 미결제 알림
+      const student = students.find(s => s.id === data.studentId);
+      setDirectScheduleToast(`${student?.name || '원생'}의 스케줄이 등록되었습니다. (미결제 상태)`);
+      setTimeout(() => setDirectScheduleToast(null), 4000);
+    }
+
     setShowDirectForm(false);
   };
 
@@ -455,44 +522,82 @@ export default function ScheduleGrid() {
     if (time) setHoveredCell({ day, time });
   };
 
+  // Pending drop for regular schedules: show choice modal (보강 vs 시간표 수정)
+  const [pendingDrop, setPendingDrop] = useState<{
+    slot: ScheduleSlot; day: DayOfWeek; time: string; oldDate: string; newDate: string;
+  } | null>(null);
+
+  const executeDrop = (mode: 'makeup' | 'permanent') => {
+    if (!pendingDrop) return;
+    const { slot, day, time, oldDate, newDate } = pendingDrop;
+
+    // Move attendance record if exists
+    const existingRecord = attendance.find(r =>
+      r.studentId === slot.studentId && r.date === oldDate && r.startTime === slot.startTime
+    );
+    if (existingRecord) {
+      updateAttendance(existingRecord.id, { date: newDate, startTime: time });
+    }
+
+    if (mode === 'makeup') {
+      // 보강 (이번 주만): 원본 유지, 임시 슬롯 생성
+      addSchedule({
+        studentId: slot.studentId,
+        dayOfWeek: slot.dayOfWeek,
+        startTime: slot.startTime,
+        duration: slot.duration,
+        isRegular: false,
+        date: oldDate,
+        isOverrideHidden: true,
+      } as Omit<ScheduleSlot, 'id'>);
+      addSchedule({
+        studentId: slot.studentId,
+        dayOfWeek: day,
+        startTime: time,
+        duration: slot.duration,
+        isRegular: false,
+        date: newDate,
+      });
+    } else {
+      // 시간표 수정 (영구): 정규 슬롯 자체를 변경
+      moveSchedule(slot.id, day, time);
+      // 연결된 결제의 regularSchedule도 업데이트
+      const payment = payments.find(p =>
+        p.studentId === slot.studentId &&
+        p.regularSchedule?.some(e => e.day === slot.dayOfWeek && e.startTime === slot.startTime)
+      );
+      if (payment) {
+        updatePayment(payment.id, {
+          regularSchedule: (payment.regularSchedule || []).map(e =>
+            e.day === slot.dayOfWeek && e.startTime === slot.startTime
+              ? { day, startTime: time }
+              : e
+          ),
+        });
+      }
+    }
+    setPendingDrop(null);
+  };
+
   const handleDayDrop = (e: React.DragEvent, day: DayOfWeek) => {
     e.preventDefault();
     const time = computeTimeFromY(e, day);
     if (time && draggedSlot && isDropValid(day, time, draggedSlot)) {
       const oldDate = getDateForDay(draggedSlot.dayOfWeek);
       const newDate = getDateForDay(day);
-      const existingRecord = attendance.find(r =>
-        r.studentId === draggedSlot.studentId &&
-        r.date === oldDate &&
-        r.startTime === draggedSlot.startTime
-      );
-      if (existingRecord) {
-        updateAttendance(existingRecord.id, { date: newDate, startTime: time });
-      }
 
       if (draggedSlot.isRegular) {
-        // 정규 스케줄: 원본은 유지하고, 이번 주에만 적용되는 임시 슬롯 생성
-        // 원래 날짜에 대한 "숨김" 마커 추가 (date 필드에 해당 주 날짜 기록)
-        addSchedule({
-          studentId: draggedSlot.studentId,
-          dayOfWeek: draggedSlot.dayOfWeek,
-          startTime: draggedSlot.startTime,
-          duration: draggedSlot.duration,
-          isRegular: false,
-          date: oldDate,
-          isOverrideHidden: true, // 이번 주 원래 슬롯 숨김용
-        } as Omit<ScheduleSlot, 'id'>);
-        // 새 위치에 임시 슬롯 생성
-        addSchedule({
-          studentId: draggedSlot.studentId,
-          dayOfWeek: day,
-          startTime: time,
-          duration: draggedSlot.duration,
-          isRegular: false,
-          date: newDate,
-        });
+        // 정규 스케줄: 보강/시간표수정 선택 모달 표시
+        setPendingDrop({ slot: draggedSlot, day, time, oldDate, newDate });
       } else {
-        // 비정규 슬롯: 원래 정규 위치로 되돌리는 경우인지 확인
+        // 비정규 슬롯 처리
+        const existingRecord = attendance.find(r =>
+          r.studentId === draggedSlot.studentId && r.date === oldDate && r.startTime === draggedSlot.startTime
+        );
+        if (existingRecord) {
+          updateAttendance(existingRecord.id, { date: newDate, startTime: time });
+        }
+
         const matchingHidden = schedules.find(s =>
           s.isOverrideHidden &&
           s.studentId === draggedSlot.studentId &&
@@ -500,11 +605,9 @@ export default function ScheduleGrid() {
           s.startTime === time
         );
         if (matchingHidden) {
-          // 원래 자리로 복원: 숨김 마커 제거 + 임시 슬롯 제거 → 정규 슬롯 자동 복원
           removeSchedule(matchingHidden.id);
           removeSchedule(draggedSlot.id);
         } else {
-          // 일반 이동
           moveSchedule(draggedSlot.id, day, time);
           if (draggedSlot.date) {
             updateSchedule(draggedSlot.id, { date: newDate });
@@ -525,27 +628,16 @@ export default function ScheduleGrid() {
   const [deletedPaymentInfo, setDeletedPaymentInfo] = useState<{ paymentId: string; entry: { day: DayOfWeek; startTime: string } } | null>(null);
 
   const handleDeleteSlot = (slot: ScheduleSlot, displayName: string) => {
-    if (!confirm(`${displayName} 스케줄을 삭제하시겠습니까?`)) return;
-
-    // 결제의 regularSchedule에서도 제거 (정규 슬롯인 경우)
-    if (slot.isRegular) {
-      const payment = payments.find(p =>
-        p.studentId === slot.studentId &&
-        p.regularSchedule?.some(e => e.day === slot.dayOfWeek && e.startTime === slot.startTime)
-      );
-      if (payment) {
-        setDeletedPaymentInfo({ paymentId: payment.id, entry: { day: slot.dayOfWeek, startTime: slot.startTime } });
-        updatePayment(payment.id, {
-          regularSchedule: (payment.regularSchedule || []).filter(
-            e => !(e.day === slot.dayOfWeek && e.startTime === slot.startTime)
-          ),
-        });
-      } else {
-        setDeletedPaymentInfo(null);
-      }
-    } else {
-      setDeletedPaymentInfo(null);
+    // 정규 슬롯: 퇴원 처리
+    if (slot.isRegular && slot.studentId) {
+      if (!confirm(`${displayName} 원생을 퇴원 처리하시겠습니까?\n지금까지의 수업 내역은 이전 스케줄표에 남아 있게 됩니다.`)) return;
+      deleteStudent(slot.studentId);
+      return;
     }
+
+    // 비정규 슬롯 (보강, 체험 등): 개별 삭제
+    if (!confirm(`${displayName} 스케줄을 삭제하시겠습니까?`)) return;
+    setDeletedPaymentInfo(null);
 
     // 항상 스케줄 배열에서 제거
     removeSchedule(slot.id);
@@ -1228,6 +1320,15 @@ export default function ScheduleGrid() {
         </div>
       </div>
 
+      {/* Direct Schedule Toast (미결제 알림) */}
+      {directScheduleToast && (
+        <div className="fixed bottom-16 left-1/2 -translate-x-1/2 bg-amber-600 text-white px-5 py-3 rounded-xl shadow-lg flex items-center gap-3 z-50 animate-fade-in">
+          <span className="text-lg">&#9888;&#65039;</span>
+          <span className="text-sm">{directScheduleToast}</span>
+          <button onClick={() => setDirectScheduleToast(null)} className="text-amber-200 hover:text-white text-xs ml-1">&times;</button>
+        </div>
+      )}
+
       {/* Undo Toast */}
       {deletedSlot && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-5 py-3 rounded-xl shadow-lg flex items-center gap-4 z-50 animate-fade-in">
@@ -1297,6 +1398,35 @@ export default function ScheduleGrid() {
                 취소
               </button>
             </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Drag Drop Choice Modal: 보강 vs 시간표 수정 */}
+      <Modal isOpen={!!pendingDrop} onClose={() => setPendingDrop(null)} title="스케줄 변경 방식 선택" size="sm">
+        {pendingDrop && (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600">
+              <span className="font-semibold">{students.find(s => s.id === pendingDrop.slot.studentId)?.name}</span> 원생의 스케줄을 이동합니다.
+            </p>
+            <button
+              onClick={() => executeDrop('makeup')}
+              className="w-full py-3 bg-blue-50 border border-blue-300 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100"
+            >
+              보강 (이번 주만 변경)
+            </button>
+            <button
+              onClick={() => executeDrop('permanent')}
+              className="w-full py-3 bg-indigo-50 border border-indigo-300 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-100"
+            >
+              시간표 수정 (영구 변경)
+            </button>
+            <button
+              onClick={() => setPendingDrop(null)}
+              className="w-full py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200"
+            >
+              취소
+            </button>
           </div>
         )}
       </Modal>

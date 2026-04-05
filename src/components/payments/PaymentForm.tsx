@@ -9,6 +9,7 @@ interface PaymentFormProps {
   payments?: Payment[];
   payment?: Payment;
   isPastMode?: boolean;
+  initialStudentId?: string;
   onSubmit: (data: Omit<Payment, 'id' | 'usedSessions' | 'remainingSessions' | 'completed'> & { isPastRecord?: boolean }) => void;
   onCancel: () => void;
 }
@@ -16,8 +17,8 @@ interface PaymentFormProps {
 const PAYMENT_METHODS: PaymentMethod[] = ['계좌이체', '현금', '카드', '온누리상품권', '기타'];
 const DAYS: DayOfWeek[] = ['월', '화', '수', '목', '금', '토'];
 
-export default function PaymentForm({ students, settings, payments: allPayments, payment, isPastMode, onSubmit, onCancel }: PaymentFormProps) {
-  const [studentId, setStudentId] = useState(payment?.studentId || '');
+export default function PaymentForm({ students, settings, payments: allPayments, payment, isPastMode, initialStudentId, onSubmit, onCancel }: PaymentFormProps) {
+  const [studentId, setStudentId] = useState(payment?.studentId || initialStudentId || '');
   const [studentSearch, setStudentSearch] = useState('');
   const [totalSessions, setTotalSessions] = useState(payment?.totalSessions || 4);
   const [classDuration, setClassDuration] = useState<ClassDuration>(payment?.classDuration || 60);

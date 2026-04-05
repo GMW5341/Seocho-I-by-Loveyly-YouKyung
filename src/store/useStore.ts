@@ -255,8 +255,8 @@ export function useStore() {
 
   const deleteStudent = useCallback((id: string) => {
     setStudents(prev => prev.map(s => s.id === id ? { ...s, active: false } : s));
-    // Clean up schedule entries for withdrawn student
-    setSchedules(prev => prev.filter(s => s.studentId !== id));
+    // Schedule entries are preserved for historical records
+    // filteredSchedules in ScheduleGrid already filters by activeStudents
   }, []);
 
   const permanentDeleteStudent = useCallback((id: string) => {

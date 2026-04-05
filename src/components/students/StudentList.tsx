@@ -74,9 +74,9 @@ export default function StudentList() {
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
         >
           <option value="전체">전체 반</option>
-          <option value="유아반">유아반</option>
-          <option value="초등(저학년)">초등(저학년)</option>
-          <option value="초등(고학년)">초등(고학년)</option>
+          <option value="60분">60분</option>
+          <option value="80분">80분</option>
+          <option value="100분">100분</option>
         </select>
         <label className="flex items-center gap-2 text-sm text-gray-600">
           <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} className="rounded" />

@@ -2,7 +2,7 @@ export type DayOfWeek = '월' | '화' | '수' | '목' | '금' | '토';
 
 export type ClassDuration = 60 | 80 | 100;
 
-export type ClassLevel = '유아반' | '초등(저학년)' | '초등(고학년)';
+export type ClassLevel = '60분' | '80분' | '100분';
 
 export type StudentGrade = '6세' | '7세' | '초등1' | '초등2' | '초등3' | '초등4' | '초등5' | '초등6';
 
@@ -44,6 +44,7 @@ export interface ScheduleSlot {
   source?: ScheduleSource; // 스케줄 출처 (직접입력 / 결제연동 / 보강 / 체험)
   linkedPaymentId?: string; // 연결된 결제 ID (결제 만료 추적용)
   startDate?: string; // 스케줄 시작일 (이 날부터 표시)
+  totalSessions?: number; // 총 수업 횟수 (직접 입력 스케줄의 기간 제한용)
   isTrial?: boolean; // 체험 수업 여부
   trialStudentId?: string; // 체험 수업 학생 ID
   date?: string; // ISO date for specific date slots (보강)

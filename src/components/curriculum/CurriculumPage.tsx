@@ -6,9 +6,9 @@ import type { ClassLevel, CurriculumFile } from '../../types';
 import { getAllCurriculumImages } from '../../services/curriculumImageStore';
 
 const CLASS_LEVELS: { level: ClassLevel; label: string; color: string; bgColor: string; borderColor: string }[] = [
-  { level: '유아반', label: '유아반', color: 'text-pink-700', bgColor: 'bg-pink-50', borderColor: 'border-pink-300' },
-  { level: '초등(저학년)', label: '초등 저학년반', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-300' },
-  { level: '초등(고학년)', label: '초등 고학년반', color: 'text-green-700', bgColor: 'bg-green-50', borderColor: 'border-green-300' },
+  { level: '60분', label: '60분반', color: 'text-cyan-700', bgColor: 'bg-cyan-50', borderColor: 'border-cyan-300' },
+  { level: '80분', label: '80분반', color: 'text-pink-700', bgColor: 'bg-pink-50', borderColor: 'border-pink-300' },
+  { level: '100분', label: '100분반', color: 'text-amber-700', bgColor: 'bg-amber-50', borderColor: 'border-amber-300' },
 ];
 
 function compressImage(dataUrl: string, maxWidth = 800, quality = 0.5): Promise<string> {
@@ -207,7 +207,7 @@ export default function CurriculumPage() {
 
   const getFilesForLevel = (level: ClassLevel): CurriculumFile[] => {
     const levelFiles = curriculum.filter(f => f.classLevel === level);
-    if (level === '유아반') {
+    if (level === '60분') {
       const legacy = curriculum.filter(f => !f.classLevel);
       return [...levelFiles, ...legacy];
     }

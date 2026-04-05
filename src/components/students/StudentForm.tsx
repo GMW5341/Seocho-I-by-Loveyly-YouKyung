@@ -8,13 +8,13 @@ interface StudentFormProps {
 }
 
 const STUDENT_GRADES: StudentGrade[] = ['6세', '7세', '초등1', '초등2', '초등3', '초등4', '초등5', '초등6'];
-const CLASS_LEVELS: ClassLevel[] = ['유아반', '초등(저학년)', '초등(고학년)'];
+const CLASS_LEVELS: ClassLevel[] = ['60분', '80분', '100분'];
 
 export default function StudentForm({ student, onSubmit, onCancel }: StudentFormProps) {
   const [name, setName] = useState(student?.name || '');
   const [gender, setGender] = useState<Gender | undefined>(student?.gender);
   const [grade, setGrade] = useState<StudentGrade>(student?.grade || '6세');
-  const [level, setLevel] = useState<ClassLevel>(student?.level || '유아반');
+  const [level, setLevel] = useState<ClassLevel>(student?.level || '60분');
   const [phone, setPhone] = useState(student?.phone || '');
   const [parentPhone, setParentPhone] = useState(student?.parentPhone || '');
   const [memo, setMemo] = useState(student?.memo || '');

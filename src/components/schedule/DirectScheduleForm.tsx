@@ -15,6 +15,7 @@ interface DirectScheduleFormProps {
     sessionsPerWeek: number;
     entries: { day: DayOfWeek; startTime: string }[];
     startDate?: string;
+    totalSessions?: number;
   }) => void;
   onCancel: () => void;
 }
@@ -26,6 +27,7 @@ export default function DirectScheduleForm({ students, onSubmit, onCancel }: Dir
   const [sessionsPerWeek, setSessionsPerWeek] = useState(0);
   const [entries, setEntries] = useState<RegularScheduleEntry[]>([]);
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [totalSessions, setTotalSessions] = useState(4);
 
   const handleSessionsChange = (n: number) => {
     setSessionsPerWeek(n);
@@ -53,6 +55,7 @@ export default function DirectScheduleForm({ students, onSubmit, onCancel }: Dir
       sessionsPerWeek,
       entries,
       startDate: startDate || undefined,
+      totalSessions,
     });
   };
 
@@ -110,6 +113,39 @@ export default function DirectScheduleForm({ students, onSubmit, onCancel }: Dir
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none"
         />
         <p className="text-xs text-gray-400 mt-0.5">이 날짜부터 스케줄이 표시됩니다</p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">총 수업 횟수</label>
+        <div className="flex gap-2 flex-wrap">
+          {[3, 4, 5, 8, 12, 16].map(n => (
+            <button
+              type="button"
+              key={n}
+              onClick={() => setTotalSessions(n)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${
+                totalSessions === n
+                  ? 'bg-emerald-500 border-emerald-500 text-white'
+                  : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {n}회
+            </button>
+          ))}
+        </div>
+        <div className="mt-1.5 flex items-center gap-2">
+          <span className="text-xs text-gray-500">직접 입력:</span>
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={totalSessions}
+            onChange={e => setTotalSessions(Math.max(1, parseInt(e.target.value) || 1))}
+            className="w-20 border border-gray-300 rounded-lg px-2 py-1 text-sm"
+          />
+          <span className="text-xs text-gray-500">회</span>
+        </div>
+        <p className="text-xs text-gray-400 mt-0.5">이 횟수만큼 수업이 진행된 후 스케줄이 종료됩니다</p>
       </div>
 
       <div>

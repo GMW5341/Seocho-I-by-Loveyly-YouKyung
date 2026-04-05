@@ -221,9 +221,9 @@ export function calculateLastClassDate(
 
 export function getClassLevelColor(level: string): string {
   switch (level) {
-    case '유아반': return 'bg-pink-100 text-pink-800 border-pink-300';
-    case '초등(저학년)': return 'bg-blue-100 text-blue-800 border-blue-300';
-    case '초등(고학년)': return 'bg-green-100 text-green-800 border-green-300';
+    case '60분': return 'bg-cyan-100 text-cyan-800 border-cyan-300';
+    case '80분': return 'bg-pink-100 text-pink-800 border-pink-300';
+    case '100분': return 'bg-amber-100 text-amber-800 border-amber-300';
     default: return 'bg-gray-100 text-gray-800 border-gray-300';
   }
 }

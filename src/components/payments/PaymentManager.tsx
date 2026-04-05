@@ -16,6 +16,7 @@ export default function PaymentManager() {
   const [showBatchForm, setShowBatchForm] = useState(false);
   const [showPastForm, setShowPastForm] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | undefined>();
+  const [preselectedStudentId, setPreselectedStudentId] = useState<string | undefined>();
   const [filterView, setFilterView] = useState<'active' | 'all' | 'unpaid'>('active');
   const [searchQuery, setSearchQuery] = useState('');
   const [historySearchQuery, setHistorySearchQuery] = useState('');
@@ -280,6 +281,7 @@ export default function PaymentManager() {
                     ) : (
                       <button
                         onClick={() => {
+                          setPreselectedStudentId(data.student.id);
                           setShowForm(true);
                         }}
                         className="text-xs text-green-600 hover:text-green-800 font-medium"
@@ -474,13 +476,14 @@ export default function PaymentManager() {
       </div>
 
       {/* Add Payment Modal */}
-      <Modal isOpen={showForm} onClose={() => setShowForm(false)} title="결제 등록" size="lg">
+      <Modal isOpen={showForm} onClose={() => { setShowForm(false); setPreselectedStudentId(undefined); }} title="결제 등록" size="lg">
         <PaymentForm
           students={activeStudents}
           settings={settings}
           payments={payments}
-          onSubmit={handleAddPayment}
-          onCancel={() => setShowForm(false)}
+          initialStudentId={preselectedStudentId}
+          onSubmit={(data) => { handleAddPayment(data); setPreselectedStudentId(undefined); }}
+          onCancel={() => { setShowForm(false); setPreselectedStudentId(undefined); }}
         />
       </Modal>
 
