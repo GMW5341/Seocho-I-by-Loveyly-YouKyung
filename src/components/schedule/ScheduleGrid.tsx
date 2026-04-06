@@ -433,15 +433,14 @@ export default function ScheduleGrid() {
     const startMin = timeToMinutes(time);
     const endMin = startMin + slot.duration;
     if (startMin < timeToMinutes(hours.start) || endMin > timeToMinutes(hours.end)) return false;
-    // Use filteredSchedules (visible slots only) + specialClassSlots for accurate capacity count
-    const visibleSlots = [...filteredSchedules, ...specialClassSlots];
-    const existingSlots = visibleSlots.filter(s => {
+    // Use filteredSchedules (visible slots only) for accurate capacity count
+    const existingSlots = filteredSchedules.filter(s => {
       if (s.id === slot.id) return false;
       if (s.dayOfWeek !== day) return false;
       return isTimeOverlapping(s.startTime, s.duration, time, slot.duration);
     });
     return existingSlots.length < settings.maxStudentsPerSlot;
-  }, [settings, filteredSchedules, specialClassSlots]);
+  }, [settings, filteredSchedules]);
 
   // 직접 스케줄 입력 핸들러
   const [directScheduleToast, setDirectScheduleToast] = useState<string | null>(null);
