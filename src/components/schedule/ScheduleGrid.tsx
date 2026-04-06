@@ -498,6 +498,8 @@ export default function ScheduleGrid() {
     const target = e.currentTarget as HTMLElement;
     const rect = target.getBoundingClientRect();
     dragOffsetRef.current = e.clientY - rect.top;
+    e.dataTransfer.setData('text/plain', slot.id);
+    e.dataTransfer.effectAllowed = 'move';
     setDraggedSlot(slot);
   };
 
@@ -515,6 +517,7 @@ export default function ScheduleGrid() {
 
   const handleDayDragOver = (e: React.DragEvent, day: DayOfWeek) => {
     e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
     const hours = getOperatingHours(settings, day);
     if (!hours) return;
     const time = computeTimeFromY(e, day);
