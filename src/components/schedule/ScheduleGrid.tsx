@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from 'date-fns';
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useAppStore } from '../../store/StoreContext';
 import type { DayOfWeek, ScheduleSlot, ClassDuration, StudentGrade, AttendanceStatus } from '../../types';
@@ -350,10 +350,31 @@ export default function ScheduleGrid() {
           const endDate = paymentEndDateMap.get(s.linkedPaymentId);
           if (endDate === null) return false; // 완료된 결제 → 표시 안 함
           if (endDate && endDate < wkStart) return false; // 이미 끝남
+          // 폴백: paymentEndDateMap에 없으면 결제에서 직접 단순 계산
+          if (endDate === undefined) {
+            const payment = payments.find(p => p.id === s.linkedPaymentId);
+            if (payment?.completed) return false;
+            if (payment?.startDate) {
+              const weeks = Math.ceil(payment.totalSessions / (payment.sessionsPerWeek || 1));
+              const estimated = format(addWeeks(parseISO(payment.startDate), weeks), 'yyyy-MM-dd');
+              if (estimated < wkStart) return false;
+            }
+          }
         } else if (s.source === 'direct' && s.totalSessions) {
           // 직접 입력 슬롯도 기간 제한 적용
           const endDate = directEndDateMap.get(s.id);
           if (endDate && endDate < wkStart) return false;
+        } else {
+          // 고아 슬롯: 같은 학생의 최근 활성 결제 기간에 맞춤
+          const studentPayment = payments.find(p =>
+            p.studentId === s.studentId && !p.completed && p.startDate
+          );
+          if (studentPayment) {
+            const weeks = Math.ceil(studentPayment.totalSessions / (studentPayment.sessionsPerWeek || 1));
+            const estimated = format(addWeeks(parseISO(studentPayment.startDate), weeks), 'yyyy-MM-dd');
+            if (estimated < wkStart) return false;
+            if (studentPayment.startDate > wkEnd) return false;
+          }
         }
 
         return true;
@@ -364,9 +385,9 @@ export default function ScheduleGrid() {
         return s.date >= wkStart && s.date <= wkEnd;
       }
 
-      return true;
+      return false; // date 없는 비정규 슬롯은 숨김
     });
-  }, [schedules, currentWeekStart, weekEnd, activeStudents, paymentEndDateMap, directEndDateMap]);
+  }, [schedules, currentWeekStart, weekEnd, activeStudents, paymentEndDateMap, directEndDateMap, payments]);
 
   // Generate virtual slots for active special classes
   const specialClassSlots = useMemo(() => {
