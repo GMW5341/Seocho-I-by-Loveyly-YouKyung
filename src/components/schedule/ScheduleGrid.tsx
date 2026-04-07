@@ -268,19 +268,27 @@ export default function ScheduleGrid() {
     for (const p of payments) {
       if (p.completed) {
         map.set(p.id, null);
-      } else if (p.startDate && p.regularSchedule?.length) {
-        const endDate = calculateLastClassDate(
-          p.startDate,
-          p.totalSessions,
-          p.regularSchedule,
-          holidayDates,
-          attendance.filter(a => a.studentId === p.studentId)
-        );
-        map.set(p.id, endDate);
+      } else if (p.startDate) {
+        // regularSchedule이 없으면 연결된 슬롯에서 요일/시간 조합
+        const regSchedule = p.regularSchedule?.length
+          ? p.regularSchedule
+          : schedules
+              .filter(s => s.linkedPaymentId === p.id && s.isRegular)
+              .map(s => ({ day: s.dayOfWeek, startTime: s.startTime }));
+        if (regSchedule.length > 0) {
+          const endDate = calculateLastClassDate(
+            p.startDate,
+            p.totalSessions,
+            regSchedule,
+            holidayDates,
+            attendance.filter(a => a.studentId === p.studentId)
+          );
+          map.set(p.id, endDate ?? p.startDate); // null 폴백: 시작일 기준
+        }
       }
     }
     return map;
-  }, [payments, holidayDates, attendance]);
+  }, [payments, schedules, holidayDates, attendance]);
 
   // Compute end dates for direct (unlinked) schedule slots with totalSessions
   const directEndDateMap = useMemo(() => {
