@@ -115,6 +115,36 @@ export function useStore() {
       });
     }
 
+    // Third migration: match orphan slots (no source, no linkedPaymentId) to payments
+    const hasOrphans = result.some(s => s.isRegular && !s.source && !s.linkedPaymentId);
+    if (hasOrphans) {
+      const activePayments = allPayments
+        .filter(p => !p.completed && p.regularSchedule?.length)
+        .sort((a, b) => b.paidAt.localeCompare(a.paidAt)); // newest first
+
+      result = result.map(s => {
+        if (!s.isRegular || s.source || s.linkedPaymentId) return s;
+
+        // Try to match with a payment by studentId + day/time
+        const matchedPayment = activePayments.find(p =>
+          p.studentId === s.studentId &&
+          p.regularSchedule?.some(e => e.day === s.dayOfWeek && e.startTime === s.startTime)
+        );
+
+        if (matchedPayment) {
+          return {
+            ...s,
+            source: 'payment' as const,
+            linkedPaymentId: matchedPayment.id,
+            startDate: s.startDate || matchedPayment.startDate,
+          };
+        }
+
+        // No matching payment: tag as direct (will show permanently until payment is registered)
+        return { ...s, source: 'direct' as const };
+      });
+    }
+
     return result;
   });
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(() => loadFromStorage(STORAGE_KEYS.attendance, []));
