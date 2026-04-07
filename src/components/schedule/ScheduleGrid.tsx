@@ -48,6 +48,9 @@ interface DisplaySlot {
   specialClassName?: string;
   specialClassStudentCount?: number;
   isUnpaid?: boolean;
+  linkedPaymentId?: string;
+  totalSessions?: number;
+  source?: string;
   column: number;
   numColumns: number;
 }
@@ -374,6 +377,15 @@ export default function ScheduleGrid() {
             const estimated = format(addWeeks(parseISO(studentPayment.startDate), weeks), 'yyyy-MM-dd');
             if (estimated < wkStart) return false;
             if (studentPayment.startDate > wkEnd) return false;
+          } else {
+            // 결제도 없는 고아 슬롯: startDate + 12주 폴백 (영구 표시 방지)
+            if (s.startDate) {
+              const fallbackEnd = format(addWeeks(parseISO(s.startDate), 12), 'yyyy-MM-dd');
+              if (fallbackEnd < wkStart) return false;
+              if (s.startDate > wkEnd) return false;
+            } else {
+              return false; // startDate조차 없으면 숨김
+            }
           }
         }
 
@@ -1131,6 +1143,7 @@ export default function ScheduleGrid() {
                     const attendanceRecord = !isSpecial && !isTrial && student ? getAttendanceRecord(student.id, dateStr, slot.startTime) : null;
                     const attendanceClass = attendanceRecord ? STATUS_COLORS[attendanceRecord.status] || '' : '';
                     const isAbsent = attendanceRecord?.status === '결석';
+                    const isOrphanSlot = slot.isRegular && !slot.linkedPaymentId && (!slot.totalSessions || slot.totalSessions === 0) && slot.source === 'direct';
 
                     // Special class block
                     if (isSpecial) {
@@ -1198,6 +1211,7 @@ export default function ScheduleGrid() {
                           ${draggedSlot?.id === slot.id ? 'drag-ghost' : !isSearchMatch ? 'opacity-20' : ''}
                           ${isSearchMatch && searchQuery ? 'ring-2 ring-indigo-500 z-20' : ''}
                           ${attendanceClass}
+                          ${isOrphanSlot && !searchQuery ? 'ring-1 ring-amber-400' : ''}
                         `}
                         style={{
                           top: top + 1,
@@ -1250,6 +1264,15 @@ export default function ScheduleGrid() {
                             <div className={`absolute right-0 top-0 bottom-0 flex items-center ${isDayView ? 'pr-2' : 'pr-1'}`}>
                               <span className={`bg-red-500 text-white font-bold rounded-sm leading-none ${isDayView ? 'px-2 py-2 text-sm' : 'px-0.5 py-0.5 text-[7px]'}`} style={{ writingMode: 'vertical-rl' }}>
                                 미결제
+                              </span>
+                            </div>
+                          )}
+
+                          {/* 결제 미등록 뱃지 - 오른쪽에 세로 표시 */}
+                          {isOrphanSlot && !slot.isUnpaid && (
+                            <div className={`absolute right-0 top-0 bottom-0 flex items-center ${isDayView ? 'pr-2' : 'pr-1'}`}>
+                              <span className={`bg-amber-500 text-white font-bold rounded-sm leading-none ${isDayView ? 'px-2 py-2 text-sm' : 'px-0.5 py-0.5 text-[7px]'}`} style={{ writingMode: 'vertical-rl' }}>
+                                ⚠미등록
                               </span>
                             </div>
                           )}
