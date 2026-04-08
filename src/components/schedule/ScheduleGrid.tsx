@@ -349,11 +349,12 @@ export default function ScheduleGrid() {
         // 날짜 범위 필터링: startDate ~ 마지막 수업일
         if (s.startDate && s.startDate > wkEnd) return false; // 시작일이 아직 안 됨
 
+        // OR 로직: 숨길 확실한 이유가 있을 때만 제외, 그 외 표시
+        // 1) 연결된 결제가 있으면 결제 종료 여부 확인
         if (s.linkedPaymentId) {
           const endDate = paymentEndDateMap.get(s.linkedPaymentId);
           if (endDate === null) return false; // 완료된 결제 → 표시 안 함
           if (endDate && endDate < wkStart) return false; // 이미 끝남
-          // 폴백: paymentEndDateMap에 없으면 결제에서 직접 단순 계산
           if (endDate === undefined) {
             const payment = payments.find(p => p.id === s.linkedPaymentId);
             if (payment?.completed) return false;
@@ -363,12 +364,14 @@ export default function ScheduleGrid() {
               if (estimated < wkStart) return false;
             }
           }
-        } else if (s.source === 'direct' && s.totalSessions) {
-          // 직접 입력 슬롯도 기간 제한 적용
+        }
+        // 2) 직접 입력 슬롯 + totalSessions → 기간 지나면 제외
+        if (s.source === 'direct' && s.totalSessions) {
           const endDate = directEndDateMap.get(s.id);
           if (endDate && endDate < wkStart) return false;
-        } else {
-          // 고아 슬롯: 같은 학생의 최근 활성 결제 기간에 맞춤
+        }
+        // 3) 연결된 결제도 없고 직접 입력도 아닌 슬롯: 활성 결제 기반 확인
+        if (!s.linkedPaymentId && !(s.source === 'direct' && s.totalSessions)) {
           const studentPayment = payments.find(p =>
             p.studentId === s.studentId && !p.completed && p.startDate
           );
@@ -377,16 +380,13 @@ export default function ScheduleGrid() {
             const estimated = format(addWeeks(parseISO(studentPayment.startDate), weeks), 'yyyy-MM-dd');
             if (estimated < wkStart) return false;
             if (studentPayment.startDate > wkEnd) return false;
-          } else {
-            // 결제도 없는 고아 슬롯: startDate + 12주 폴백 (영구 표시 방지)
-            if (s.startDate) {
-              const fallbackEnd = format(addWeeks(parseISO(s.startDate), 12), 'yyyy-MM-dd');
-              if (fallbackEnd < wkStart) return false;
-              if (s.startDate > wkEnd) return false;
-            } else {
-              return false; // startDate조차 없으면 숨김
-            }
           }
+          // 결제 없는 슬롯: startDate가 있고 12주 지났으면 제외, 그 외 표시
+          if (!studentPayment && s.startDate) {
+            const fallbackEnd = format(addWeeks(parseISO(s.startDate), 12), 'yyyy-MM-dd');
+            if (fallbackEnd < wkStart) return false;
+          }
+          // startDate 없거나 결제 없어도 → 기본 표시 (숨길 이유 없음)
         }
 
         return true;
