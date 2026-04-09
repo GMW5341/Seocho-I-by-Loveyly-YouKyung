@@ -46,9 +46,21 @@ export function useStore() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [students, setStudents] = useState<Student[]>(() => {
     const loaded = loadFromStorage<Record<string, unknown>[]>(STORAGE_KEYS.students, []);
-    // Strip deprecated schedule fields from student records (clean migration)
+    // Migrate old level values + strip deprecated schedule fields
+    const LEVEL_MIGRATION: Record<string, string> = {
+      '유아반': '60분', '초등(저학년)': '80분', '초등저학년반': '80분',
+      '초등(고학년)': '100분', '초등고학년반': '100분',
+    };
     return loaded.map(s => {
       const { classDuration: _cd, sessionsPerWeek: _spw, regularSchedule: _rs, regularDays: _rd, regularStartTimes: _rst, regularStartTime: _rst2, ...clean } = s as Record<string, unknown>;
+      // Migrate old class level names to duration-based names
+      if (typeof clean.level === 'string' && LEVEL_MIGRATION[clean.level]) {
+        clean.level = LEVEL_MIGRATION[clean.level];
+      }
+      // Ensure active defaults to true for old data missing this field
+      if (clean.active === undefined || clean.active === null) {
+        clean.active = true;
+      }
       return clean as unknown as Student;
     });
   });
@@ -140,8 +152,13 @@ export function useStore() {
           };
         }
 
-        // No matching payment: tag as direct (will show permanently until payment is registered)
-        return { ...s, source: 'direct' as const };
+        // No matching payment: tag as direct, backfill startDate from any payment for this student
+        const anyPayment = allPayments.find(p => p.studentId === s.studentId && p.startDate);
+        return {
+          ...s,
+          source: 'direct' as const,
+          startDate: s.startDate || anyPayment?.startDate,
+        };
       });
     }
 
